@@ -1,0 +1,11 @@
+build/
+dist/
+.venv/
+__pycache__/
+*.pyc
+dados/
+icone.ico
+installer/Output/
+*.rar
+*.zip
+teste_dados/

@@ -1,0 +1,4 @@
+-r requirements.txt
+pyinstaller>=6.0
+pystray>=0.19
+pillow>=10.0
