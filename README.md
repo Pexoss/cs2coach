@@ -8,6 +8,7 @@ então **não há risco de VAC**.
 ## Para usar (você ou seus amigos, Windows)
 
 **Opção A: instalador (recomendado, não precisa de Python)**
+0. Baixe o instalador em https://github.com/Pexoss/cs2coach/releases/latest/download/CS2Coach-Setup.exe
 1. Rode `CS2Coach-Setup.exe` e clique em Avançar.
 2. Abra o **CS2 Coach** pelo menu Iniciar. O navegador abre sozinho no assistente de primeira vez (1 minuto).
 3. Pronto. Baixe as demos no CS2 (Seu perfil > Partidas > Baixar) e o programa analisa sozinho.
@@ -41,25 +42,19 @@ desde que você extraia a versão nova por cima da pasta antiga.
 
 Imagens reais das armas: coloque PNGs em `%APPDATA%\CS2Coach\armas_img\` com o nome interno (`ak47.png`, `awp.png`...).
 
-## Publicar uma versão (GitHub Releases + aviso automático)
+## Publicar uma versão (100% automático)
+O GitHub faz tudo sozinho: **a cada commit que muda o programa** (pastas `app/` e `installer/`, `cs2coach.spec`, `icone.ico`,
+`requirements*.txt`) na branch `main`, ele gera o instalador, testa se abre e publica uma nova versão em *Releases*, com a
+numeração `5.0.N` (N sobe sozinho a cada commit). Ninguém precisa criar tag nem gerar o instalador no próprio PC.
 
-**Uma vez só**
-1. Crie uma conta em github.com e um repositório **público** (ex.: `cs2coach`). Público é necessário para o programa dos seus
-   amigos conseguir perguntar se há versão nova; o código também fica visível. Releases de repositório privado não funcionam com o aviso.
-2. Envie esta pasta para o repositório (GitHub Desktop: *Add local repository > Publish*; ou `git init`, `git add .`, `git commit`, `git push`).
-   O arquivo `.gitignore` já deixa de fora `build`, `dist`, `dados` e arquivos grandes.
-3. No GitHub: *Settings > Actions > General > Workflow permissions* e marque **Read and write permissions**.
-
-**A cada versão nova**
-1. Substitua os arquivos pelos da versão nova (o que eu enviar) e faça *commit* e *push*.
-2. Crie a tag da versão e envie: `git tag v5.0.1` e `git push origin v5.0.1` (ou, no GitHub: *Releases > Draft a new release*, crie a tag e publique).
-3. Espere uns 10 minutos (aba *Actions*). O GitHub gera o programa, testa se abre e publica em *Releases* o `CS2Coach-Setup.exe`
-   e o `CS2Coach-portatil.zip`. O número da versão vem da tag (v5.0.1 vira 5.0.1) e o nome do repositório é preenchido sozinho.
-4. Pronto: quem já usa o CS2 Coach vê um aviso azul "Nova versão disponível" com o botão de baixar (consulta a cada poucas horas,
-   só lê o número da versão; nada é enviado). Para teste, a aba *Actions > Run workflow* gera os arquivos sem publicar.
-
-**No seu Windows (alternativa sem GitHub):** instale o Python e o Inno Setup 6, depois `pip install -r requirements-build.txt`,
-`python gerar_icone.py`, `pyinstaller cs2coach.spec --noconfirm` e compile `installer\cs2coach.iss` no Inno Setup.
+- **Link fixo para baixar o instalador (para mandar aos amigos):**
+  `https://github.com/Pexoss/cs2coach/releases/latest/download/CS2Coach-Setup.exe`
+- Cada Release traz **só** o `CS2Coach-Setup.exe`, que é o que a pessoa precisa baixar.
+- Quem já usa o programa vê um aviso azul "Nova versão disponível" com o botão de baixar (consulta a cada poucas horas,
+  só lê o número da versão; nada é enviado).
+- Para trocar a versão "grande" (5.0 para 5.1), edite `VERSAO_BASE` no arquivo `.github/workflows/build.yml`.
+- Para testar sem publicar: aba *Actions > Gerar e publicar o CS2 Coach > Run workflow*; o instalador fica em *Artifacts*.
+- Mudanças só no LEIA-ME não geram versão nova.
 
 ## Linha de comando (avançado)
 `python app\hub.py --help` · `python app\analisar_demo.py arquivo.dem --jogador SeuNick` · `python app\ao_vivo.py --diagnostico`

@@ -1,33 +1,48 @@
-name: Gerar instalador do CS2 Coach (Windows)
+name: Gerar e publicar o CS2 Coach (Windows)
+
+# Automático: sempre que o código do programa mudar na branch main, o GitHub gera o instalador
+# e publica uma nova versão em Releases (numeração 5.0.N, onde N cresce sozinho a cada commit).
+# Para mudar a versão "grande" (ex.: 5.0 -> 5.1), edite VERSAO_BASE abaixo.
+# Manual: aba Actions > Run workflow gera os arquivos para teste, sem publicar.
 
 permissions:
-  contents: write           # necessário para publicar o Release
+  contents: write
 
 on:
-  workflow_dispatch:        # botão "Run workflow" na aba Actions
   push:
-    tags: ["v*"]            # ou: git tag v5.0.0 && git push --tags
+    branches: [main]
+    paths:
+      - "app/**"
+      - "installer/**"
+      - "cs2coach.spec"
+      - "icone.ico"
+      - "requirements*.txt"
+  workflow_dispatch:
+
+env:
+  VERSAO_BASE: "5.0"
 
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # precisa do histórico para contar os commits
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Definir versão (da tag) e repositório
+      - name: Definir versão e repositório
         id: ver
         shell: pwsh
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") } else { $v = "0.0.0-teste" }
+          $n = (git rev-list --count HEAD).Trim()
+          $v = "${{ env.VERSAO_BASE }}.$n"
           Set-Content -Path app\versao.py -Encoding utf8 -Value "VERSAO = `"$v`"", "REPO = `"${{ github.repository }}`""
           "versao=$v" >> $env:GITHUB_OUTPUT
           Get-Content app\versao.py
       - name: Instalar dependências
         run: pip install -r requirements-build.txt
-      - name: Gerar icone
-        run: python gerar_icone.py
       - name: Gerar o programa (PyInstaller)
         run: pyinstaller cs2coach.spec --noconfirm
       - name: Testar que o programa abre
@@ -44,19 +59,17 @@ jobs:
         run: choco install innosetup -y --no-progress
       - name: Gerar o instalador
         run: iscc /DVersao="${{ steps.ver.outputs.versao }}" installer\cs2coach.iss
-      - name: Compactar versão portátil
-        run: Compress-Archive -Path dist\CS2Coach -DestinationPath CS2Coach-portatil.zip
-      - uses: actions/upload-artifact@v4
+      - name: Guardar o instalador (para testes)
+        uses: actions/upload-artifact@v4
         with:
-          name: CS2Coach-Windows
-          path: |
-            installer/Output/CS2Coach-Setup.exe
-            CS2Coach-portatil.zip
-      - name: Publicar em Releases (quando for uma tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            installer/Output/CS2Coach-Setup.exe
-            CS2Coach-portatil.zip
+          name: CS2Coach-Setup
+          path: installer/Output/CS2Coach-Setup.exe
+      - name: Publicar em Releases
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.versao }}"
+          $nota = "**Para instalar:** baixe só o arquivo **CS2Coach-Setup.exe** logo abaixo (ignore 'Source code') e execute. Se o Windows avisar que protegeu o PC, clique em *Mais informações > Executar assim mesmo*. Seus dados e histórico são mantidos ao atualizar."
+          gh release create "v$v" "installer/Output/CS2Coach-Setup.exe" --target "${{ github.sha }}" --title "CS2 Coach $v" --notes "$nota" --generate-notes
