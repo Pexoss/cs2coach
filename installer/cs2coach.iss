@@ -34,10 +34,12 @@ Name: "desktop"; Description: "Criar atalho na Área de Trabalho"; Flags: unchec
 Source: "..\dist\CS2Coach\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#Nome}"; Filename: "{app}\CS2Coach.exe"
-Name: "{autodesktop}\{#Nome}"; Filename: "{app}\CS2Coach.exe"; Tasks: desktop
+Name: "{autoprograms}\{#Nome}"; Filename: "{app}\CS2Coach.exe"; AppUserModelID: "Pexoss.CS2Coach"
+Name: "{autodesktop}\{#Nome}"; Filename: "{app}\CS2Coach.exe"; Tasks: desktop; AppUserModelID: "Pexoss.CS2Coach"
 
 [Run]
+; atualiza o cache de icones do Windows (senao o icone antigo pode continuar aparecendo)
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait skipifdoesntexist
 Filename: "{app}\CS2Coach.exe"; Description: "Abrir o CS2 Coach agora"; Flags: nowait postinstall
 
 [UninstallDelete]

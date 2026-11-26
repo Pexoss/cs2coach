@@ -390,6 +390,34 @@ def detalhar_kills(demo, sid, kills, meus, aberturas):
     return out
 
 
+GRUPOS_ACERTO = {"head": "cabeça", "chest": "peito", "stomach": "barriga", "left_arm": "braço", "right_arm": "braço",
+                 "left_leg": "perna", "right_leg": "perna", "neck": "pescoço", "generic": "granada/outro", "gear": "colete"}
+
+
+def detalhar_acertos(demo, meus):
+    """Dano por round e onde os tiros acertaram (cabeca, peito, perna...), com distancia media do acerto."""
+    por_round = {}
+    total = {}
+    for r in meus.itertuples():
+        rn = int(r.rnd)
+        g = GRUPOS_ACERTO.get(str(r.hitgroup), str(r.hitgroup))
+        d = por_round.setdefault(rn, {"rnd": rn, "dano": 0, "acertos": 0, "locais": {}, "dists": []})
+        d["dano"] += int(r.dmg_health)
+        d["acertos"] += 1
+        d["locais"][g] = d["locais"].get(g, 0) + 1
+        dist = _num(getattr(r, "dist", None))
+        if dist is not None:
+            d["dists"].append(dist)
+        total[g] = total.get(g, 0) + 1
+    rounds = []
+    for rn, _, _ in demo.rounds:
+        d = por_round.get(rn) or {"rnd": rn, "dano": 0, "acertos": 0, "locais": {}, "dists": []}
+        dists = d.pop("dists")
+        d["dist_media"] = round(sum(dists) / len(dists), 1) if dists else None
+        rounds.append(d)
+    return {"rounds": rounds, "locais": total}
+
+
 def metricas_scope(kills_det, meus, classes, geral):
     """Metricas que o jogo nao mostra: HS por acerto, tempo para matar, kills parado etc."""
     armas_gun = [k for k in kills_det if ARMA_PARA_CLASSE.get(k["arma"])]
@@ -594,6 +622,7 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
                        "pct_rounds_dano_baixo": pct(sum(1 for x in danos if x < 40), len(danos))},
         "detalhes_mortes": detalhes_mortes,
         "kills_det": kills_det,
+        "acertos_det": detalhar_acertos(demo, meus),
         "scope": metricas_scope(kills_det, meus, por_classe, geral),
     }
     return res

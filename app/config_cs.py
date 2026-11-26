@@ -279,15 +279,16 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
     def registrar(p: Path):
         conf["arquivos"].append({"nome": p.name, "pasta": str(p.parent),
                                  "modificado": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
+        return datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
     if pasta_usuario and Path(pasta_usuario).is_dir():
         pu = Path(pasta_usuario)
         for padrao, destino in (("cs2_machine_convars*.vcfg", "convars"), ("cs2_user_convars*.vcfg", "convars")):
             arq = _mais_recente(pu, padrao)
             if arq:
-                registrar(arq)
+                mod = registrar(arq)
                 for k, v in _pares(parse_kv(_ler_texto(arq)), "convars").items():
-                    conf[destino][k.lower()] = {"valor": v, "origem": arq.name}
+                    conf[destino][k.lower()] = {"valor": v, "origem": arq.name, "mod": mod}
         arq = _mais_recente(pu, "cs2_user_keys*.vcfg")
         if arq:
             registrar(arq)
@@ -301,10 +302,10 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
         for nome in ("autoexec.cfg", "config.cfg"):
             arq = pu / nome
             if arq.exists():
-                registrar(arq)
+                mod = registrar(arq)
                 cv, bd = parse_cfg(_ler_texto(arq))
                 for k, v in cv.items():
-                    conf["autoexec"][k] = {"valor": v, "origem": nome}
+                    conf["autoexec"][k] = {"valor": v, "origem": nome, "mod": mod}
                 for k, v in bd.items():
                     conf["teclas"].setdefault(k, {"valor": v, "origem": nome})
         if not conf["arquivos"]:
@@ -316,10 +317,10 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
         for nome in ("autoexec.cfg",):
             arq = Path(pasta_jogo) / nome
             if arq.exists():
-                registrar(arq)
+                mod = registrar(arq)
                 cv, bd = parse_cfg(_ler_texto(arq))
                 for k, v in cv.items():
-                    conf["autoexec"][k] = {"valor": v, "origem": "jogo/" + nome}
+                    conf["autoexec"][k] = {"valor": v, "origem": "jogo/" + nome, "mod": mod}
                 for k, v in bd.items():
                     conf["teclas"].setdefault(k, {"valor": v, "origem": "jogo/" + nome})
     return conf
@@ -329,13 +330,20 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
 # Consulta e resumo
 # --------------------------------------------------------------------------
 def obter(conf: dict, nome: str, padrao=None):
-    """Valor efetivo: o autoexec (roda ao abrir o jogo) vence as configuracoes salvas."""
+    """Valor efetivo: vale o que foi gravado por ultimo. O autoexec roda ao abrir o jogo, mas uma mudanca feita
+    depois nas opcoes do jogo (arquivo salvo mais tarde) passa a valer por cima dele."""
     nome = nome.lower()
+    melhor, melhor_mod = None, None
     for grupo in ("autoexec", "convars", "video"):
         v = (conf.get(grupo) or {}).get(nome)
-        if v is not None:
-            return v["valor"] if isinstance(v, dict) else v
-    return padrao
+        if v is None:
+            continue
+        mod = (v.get("mod") or "") if isinstance(v, dict) else ""
+        if melhor is None or mod > melhor_mod:        # empate: o primeiro grupo (autoexec) vence
+            melhor, melhor_mod = v, mod
+    if melhor is None:
+        return padrao
+    return melhor["valor"] if isinstance(melhor, dict) else melhor
 
 
 def _num(v):

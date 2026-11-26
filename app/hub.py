@@ -142,16 +142,16 @@ def grafico_linha(pontos, titulo, sufixo="", cor="#4cc2ff", casas=0):
 # Layout
 # --------------------------------------------------------------------------
 CSS = """
-:root{--bg:#202020;--side:#202020;--card:#2b2b2b;--card2:#353535;--stroke:#3b3b3b;--tx:#ffffff;--mut:#b4b4b4;--ac:#60cdff;--onac:#00253a;
+:root{--bg:#262626;--side:#181818;--card:#2f2f2f;--card2:#353535;--stroke:#3b3b3b;--tx:#ffffff;--mut:#b4b4b4;--ac:#60cdff;--onac:#00253a;
 --ok:#6ccb5f;--ruim:#ff99a4;--warn:#fcc84a;--hover:rgba(255,255,255,.06);--sel:rgba(255,255,255,.09);--sombra:0 2px 8px rgba(0,0,0,.25);
 --p-dados-bg:#2f2a4d;--p-dados-tx:#cdbdff;--p-live-bg:#143a47;--p-live-tx:#8fdcf0;--p-ruim-bg:#4a2329;--p-ruim-tx:#ffb3ba;--p-ok-bg:#1f3b2a;--p-ok-tx:#9be6bd;--perigo-bg:#5a2b32;--perigo-tx:#ffd5d9}
-@media (prefers-color-scheme:light){:root{--bg:#f3f3f3;--side:#f3f3f3;--card:#ffffff;--card2:#f0f0f0;--stroke:#e3e3e3;--tx:#1a1a1a;--mut:#5f5f5f;--ac:#005fb8;--onac:#ffffff;
+@media (prefers-color-scheme:light){:root{--bg:#f8f9fb;--side:#e4e9f1;--card:#ffffff;--card2:#eef1f6;--stroke:#dde2ea;--tx:#1a1a1a;--mut:#5f5f5f;--ac:#005fb8;--onac:#ffffff;
 --ok:#0f7b0f;--ruim:#c42b1c;--warn:#9d5d00;--hover:rgba(0,0,0,.05);--sel:rgba(0,0,0,.07);--sombra:0 2px 8px rgba(0,0,0,.08);
 --p-dados-bg:#ece6ff;--p-dados-tx:#4b2ca3;--p-live-bg:#dff3fb;--p-live-tx:#005a80;--p-ruim-bg:#fde7e9;--p-ruim-tx:#a4262c;--p-ok-bg:#dff6dd;--p-ok-tx:#0e700e;--perigo-bg:#fde7e9;--perigo-tx:#a4262c}}
 *{box-sizing:border-box}html{color-scheme:dark light}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif;display:flex;min-height:100vh}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif;display:flex;height:100vh;overflow:hidden;background:var(--side)}
 a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
-.side{width:268px;flex:none;background:var(--side);padding:14px 10px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.side{width:268px;flex:none;background:transparent;padding:14px 10px;height:100vh;display:flex;flex-direction:column;gap:2px;overflow:auto}
 .marca{display:flex;align-items:center;gap:10px;padding:6px 10px 14px;font:600 15px "Segoe UI Variable Display","Segoe UI",sans-serif}
 .marca svg{width:26px;height:26px;flex:none}.marca small{display:block;font-weight:400;color:var(--mut);font-size:11px;line-height:1.1}
 .side a.item{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:6px;color:var(--tx);position:relative;white-space:nowrap}
@@ -166,26 +166,31 @@ a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
 body.compacto .side{width:60px}body.compacto .side .txt,body.compacto .marca b,body.compacto .marca small,body.compacto .side .ver{display:none}
 body.compacto .side a.item{padding:0;justify-content:center}body.compacto .marca{justify-content:center;padding:6px 0 10px}
 @media (max-width:900px){.side{width:60px}.side .txt,.marca b,.marca small,.side .ver{display:none}.side a.item{padding:0;justify-content:center}.marca{justify-content:center}}
-main{flex:1;min-width:0;padding:10px 12px 0 0}
-.wrap{background:var(--bg);max-width:1180px;margin:0 auto;padding:14px 28px 60px}
+main{flex:1;min-width:0;margin:8px 8px 8px 0;height:calc(100vh - 16px);overflow:auto;background:var(--bg);border:1px solid var(--stroke);border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+html.max main{margin:0;height:100vh;border-radius:0;border-width:0 0 0 1px;box-shadow:none}
+main::-webkit-scrollbar,.side::-webkit-scrollbar{width:12px}
+main::-webkit-scrollbar-thumb,.side::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px;border:3px solid transparent;background-clip:content-box}
+main::-webkit-scrollbar-thumb:hover{background:var(--mut);background-clip:content-box;border:3px solid transparent}
+main::-webkit-scrollbar-track{background:transparent;margin:10px 0}
+.wrap{background:transparent;max-width:1180px;margin:0 auto;padding:14px 28px 60px}
 h1{font:600 28px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:6px 0 4px}
 h2{font:600 17px/1.3 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:28px 0 10px}
 h4{margin:0 0 6px;font-size:13px;color:var(--mut);font-weight:600}
 .sub,.nota{color:var(--mut)}.nota{font-size:12.5px}.vazio{color:var(--mut);padding:8px 0}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
 .card,.graf,table,.dica,.ok,.aviso,details,pre{border:1px solid var(--stroke);box-shadow:var(--sombra)}
-.card{background:var(--card);border-radius:8px;padding:12px 14px}.card b{display:block;font:600 26px "Segoe UI Variable Display","Segoe UI",sans-serif}.card span{color:var(--mut);font-size:12px}
+.card{background:var(--card);border-radius:12px;padding:12px 14px}.card b{display:block;font:600 26px "Segoe UI Variable Display","Segoe UI",sans-serif}.card span{color:var(--mut);font-size:12px}
 .up{color:var(--ok)}.down{color:var(--ruim)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
-.graf{background:var(--card);border-radius:8px;padding:10px 12px}.graf svg{width:100%;height:auto}
-table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border-radius:8px;overflow:hidden;margin:8px 0}
+.graf{background:var(--card);border-radius:12px;padding:10px 12px}.graf svg{width:100%;height:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border-radius:12px;overflow:hidden;margin:8px 0}
 th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--stroke);vertical-align:top}
 th{color:var(--mut);font-weight:600;font-size:12.5px;background:var(--card2)}tr:last-child td{border-bottom:0}tbody tr:hover td,table tr:hover td{background:var(--hover)}
 .bar{background:var(--card2);border-radius:4px;height:8px;min-width:60px}.bar i{display:block;height:8px;border-radius:4px;background:var(--ac)}
-.dica{background:var(--card);border-radius:8px;padding:12px 16px;margin:10px 0;border-left:4px solid var(--warn)}
+.dica{background:var(--card);border-radius:12px;padding:12px 16px;margin:10px 0;border-left:4px solid var(--warn)}
 .dica.p1{border-left-color:var(--ruim)}.dica.p3{border-left-color:var(--ac)}.dica h3{margin:0 0 6px;font-size:15px}.dica p{margin:4px 0}
-.ok{background:var(--card);border-left:4px solid var(--ok);border-radius:8px;padding:8px 14px;margin:8px 0}
-.aviso{background:var(--card);border-left:4px solid var(--warn);border-radius:8px;padding:10px 14px;margin:10px 0}
+.ok{background:var(--card);border-left:4px solid var(--ok);border-radius:12px;padding:8px 14px;margin:8px 0}
+.aviso{background:var(--card);border-left:4px solid var(--warn);border-radius:12px;padding:10px 14px;margin:10px 0}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 14px;border-bottom:1px solid var(--stroke)}
 .tabs a{padding:7px 14px;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0}
 .tabs a.on{color:var(--tx);font-weight:600;border-bottom-color:var(--ac)}.tabs a:hover{text-decoration:none;background:var(--hover)}
@@ -204,7 +209,7 @@ iframe{width:100%;height:760px;border:1px solid var(--stroke);border-radius:8px;
 .icarma{color:var(--ac);vertical-align:middle;margin-right:8px;width:auto}.icimg{height:30px;vertical-align:middle;margin-right:8px}
 .icmask{display:inline-block;vertical-align:middle;margin-right:8px;background:var(--ac);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .expl{color:var(--mut);font-size:12.5px;margin:2px 0 0}.pill.dados{background:var(--p-dados-bg);color:var(--p-dados-tx)}.pill.live{background:var(--p-live-bg);color:var(--p-live-tx)}
-details{background:var(--card);border-radius:8px;padding:8px 14px;margin:10px 0}summary{cursor:pointer;font-weight:600}
+details{background:var(--card);border-radius:12px;padding:8px 14px;margin:10px 0}summary{cursor:pointer;font-weight:600}
 .pill.ruim{background:var(--p-ruim-bg);color:var(--p-ruim-tx)}.pill.ok{background:var(--p-ok-bg);color:var(--p-ok-tx)}
 ::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--card2);border-radius:8px;border:3px solid var(--bg)}
 """
@@ -236,6 +241,8 @@ NAV_RODAPE = [("/ajustes", "Ajustes")]
 
 JS = """
 try{if(localStorage.getItem('menu')==='c')document.documentElement.classList.add('c')}catch(e){}
+function ajustaMax(){var m=(window.outerWidth>=screen.availWidth-2&&window.outerHeight>=screen.availHeight-2)||!!document.fullscreenElement;document.documentElement.classList.toggle('max',m)}
+window.addEventListener('resize',ajustaMax);document.addEventListener('DOMContentLoaded',ajustaMax);
 function alterna(){var c=document.body.classList.toggle('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}}
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a){e.preventDefault();fetch('/abrir?u='+encodeURIComponent(a.href))}});
 document.addEventListener('DOMContentLoaded',function(){try{if(localStorage.getItem('menu')==='c')document.body.classList.add('compacto')}catch(e){}});
@@ -764,6 +771,23 @@ def pg_kills(pid, q):
         corpo += ("<h2>Como foi cada kill</h2>" + ("<table><tr><th>Round</th><th>Tempo</th><th>Arma</th><th>Distância</th>"
                   "<th title='Do primeiro dano até a morte'>Tempo p/ matar</th><th>Como</th><th>Vítima</th></tr>"
                   + linhas_k + "</table>" if linhas_k else "<div class='vazio'>Nenhuma kill sua nesta partida.</div>"))
+    ac = res.get("acertos_det")
+    if ac and modo in ("kills", "ambas"):
+        tot = sum((ac.get("locais") or {}).values()) or 1
+        locais = " · ".join(f"{esc(k)} {100 * v / tot:.0f}%" for k, v in
+                            sorted((ac.get("locais") or {}).items(), key=lambda kv: -kv[1]))
+        kr = {}
+        for k in kills:
+            kr[k["rnd"]] = kr.get(k["rnd"], 0) + 1
+        linhas_d = "".join(
+            f"<tr><td>{x['rnd']}</td><td>{x['dano']}</td><td>{x['acertos']}</td><td>{kr.get(x['rnd'], 0)}</td>"
+            f"<td>{fmt(x.get('dist_media'), ' m', 0)}</td>"
+            f"<td class='sub'>{esc(', '.join(f'{n}× {l}' for l, n in sorted(x['locais'].items(), key=lambda kv: -kv[1])) or '—')}</td></tr>"
+            for x in ac.get("rounds", []))
+        corpo += ("<h2>Dano e onde os tiros acertaram</h2>"
+                  f"<p class='nota'>Distribuição dos seus acertos: {locais or '—'}.</p>"
+                  "<table><tr><th>Round</th><th>Dano</th><th>Acertos</th><th>Kills</th><th>Dist. média</th>"
+                  "<th>Onde acertou</th></tr>" + linhas_d + "</table>")
     if modo in ("mortes", "ambas"):
         corpo += ("<h2>Como você morreu</h2>" + ("<table><tr><th>Round</th><th>Tempo</th><th>Arma</th><th>Distância</th>"
                   "<th>Como</th><th>Quem</th></tr>" + linhas_m + "</table>" if linhas_m else "<div class='vazio'>Nenhuma morte.</div>"))
@@ -1240,6 +1264,7 @@ def _log(msg):
 
 
 def _rodar_analise(demos, steamid, nick, refazer):
+    atualizar_config("demo")     # a configuracao em uso agora entra no historico antes de analisar
     try:
         try:
             import analisar_demo as ad
@@ -2256,6 +2281,12 @@ def iniciar_ao_vivo(host, porta, token):
         E.gsi_erro = (f"a porta {porta} já está em uso (provavelmente o ao_vivo.py aberto em outra janela)")
         return
     E.coach = coach
+    coach.ao_iniciar = lambda: atualizar_config("ao vivo")
+    with contextlib.suppress(Exception):
+        if ao_vivo.migrar_cfg(porta, token):
+            with E.lock:
+                E.mensagem = ("Atualizei o arquivo de integração com o jogo (agora com posição e dano por round). "
+                              "Reinicie o CS2 uma vez para valer.")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
 
     def vigia():
@@ -2266,17 +2297,28 @@ def iniciar_ao_vivo(host, porta, token):
     threading.Thread(target=vigia, daemon=True).start()
 
 
-def vigia_config():
-    """Confere os arquivos de configuracao do jogo de tempos em tempos e registra qualquer mudanca."""
-    while True:
+_LOCK_CONFIG = threading.Lock()
+
+
+def atualizar_config(motivo=""):
+    """Le a configuracao do jogo agora (sens, mira, video...) e guarda se mudou. Retorna True se mudou."""
+    with _LOCK_CONFIG:
         try:
             aj = armazem.ajustes_todos()
             conf = config_cs.ler_configuracoes(aj.get("pasta_cfg_usuario") or None, aj.get("pasta_cfg_jogo") or None)
             if conf.get("arquivos"):
-                armazem.salvar_config(conf)
+                _, mudou = armazem.salvar_config(conf)
+                return mudou
         except Exception:
             pass
-        time.sleep(30)
+    return False
+
+
+def vigia_config():
+    """Confere os arquivos de configuracao do jogo de tempos em tempos e registra qualquer mudanca."""
+    while True:
+        atualizar_config("vigia")
+        time.sleep(20)
 
 
 def _console_windows(mostrar: bool):
@@ -2352,6 +2394,8 @@ def main():
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(Exception):
             stream.reconfigure(errors="replace", line_buffering=True)
+    with contextlib.suppress(Exception):
+        janela_mod.definir_identidade()     # icone proprio na barra de tarefas
     ap = argparse.ArgumentParser(description="CS2 Coach: Hub (central local).")
     ap.add_argument("--porta", type=int, default=3100, help="porta do Hub (padrão 3100)")
     ap.add_argument("--porta-gsi", type=int, default=3000, help="porta do painel ao vivo (padrão 3000)")

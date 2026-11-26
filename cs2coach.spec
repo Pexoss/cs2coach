@@ -3,7 +3,7 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-datas, binaries, hidden = [("app/armas_img", "armas_img")], [], ["analisar_demo", "ao_vivo", "janela", "icone_app", "pystray._win32",
+datas, binaries, hidden = [("app/armas_img", "armas_img")] + ([("icone.ico", ".")] if os.path.exists("icone.ico") else []), [], ["analisar_demo", "ao_vivo", "janela", "icone_app", "pystray._win32",
                          "webview.platforms.edgechromium", "clr"]
 for pacote in ("demoparser2", "polars", "pyarrow", "tqdm", "webview", "clr_loader", "pythonnet", "proxy_tools", "bottle"):
     d, b, h = collect_all(pacote)

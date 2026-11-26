@@ -61,8 +61,9 @@ CLASSES = {
 ARMA_PARA_CLASSE = {a: c for c, armas in CLASSES.items() for a in armas}
 AUTOMATICAS = {"rifle", "smg", "metralhadora"}
 GAP_RAJADA_S = 0.35          # pausa que encerra uma rajada
-JANELA_SEM_ATIRAR_S = 1.5    # janela para "morreu sem atirar"
-GRACA_FIM_ROUND_S = 20.0     # apos o fim do round, espera ate isto por kills/mortes atrasados antes de fechar o resumo
+JANELA_SEM_ATIRAR_S = 4.0    # janela para "morreu sem atirar" (tiro, dano ou kill nos ultimos segundos)
+JANELA_KILL_TARDIA_S = 3.0   # kill vista nos primeiros segundos de um round novo pertence ao round anterior
+GRACA_FIM_ROUND_S = 40.0     # apos o fim do round, espera ate isto por kills/mortes atrasados antes de fechar o resumo
 MORTE_CEDO_S = 20.0          # morte nos primeiros segundos do round
 COOLDOWN_ALERTA_S = 20.0
 
@@ -164,6 +165,7 @@ class Coach:
         self.hs_kills = 0
         self.rajadas_cont = {}   # classe -> {tap, curta, media, longa, tiros}
         self.por_arma = {}       # arma -> {tiros, kills}
+        self.ao_iniciar = getattr(self, "ao_iniciar", None)   # funcao chamada no inicio de cada partida/sessao
         self.rounds = []         # resumo por round (modos com rounds)
         self.vidas = []          # resumo por vida (DM / Arms Race)
         self.minutos = {}        # minuto -> {kills, tiros, longas} (DM / treino)
@@ -202,6 +204,15 @@ class Coach:
         self.t_vida = None
         self._hs_round_ant = 0
         self._morte_origem = None
+        self.r_kills_det = []     # {arma, hs, t, pos}: cada kill do round
+        self.r_dano_ev = []       # {t, dano, arma}: cada aumento de dano causado
+        self.r_dano_ant = 0
+        self.r_pos_morte = None
+        self._t_acao = None       # ultimo tiro / dano / kill
+        self._sem_atirar_pend = False
+        self._t_ult_proprio = None
+        self._t_abertura = None
+        self._pos = None
 
     def definir_modo(self, novo: str) -> bool:
         with self.lock:
@@ -293,6 +304,13 @@ class Coach:
             self.ultimo_raw = p
             if self.pacotes == 1:
                 print("✔ Primeiro pacote do jogo recebido! A integração está funcionando.")
+                self._avisar_inicio()
+
+    def _avisar_inicio(self):
+        """Avisa quem usa o Coach (o Hub) que comecou uma sessao/partida: ele le a configuracao do jogo de novo."""
+        f = getattr(self, "ao_iniciar", None)
+        if f:
+            threading.Thread(target=f, daemon=True).start()
 
     def _em_jogo(self, fase_round) -> bool:
         if self.fase_mapa == "gameover":
@@ -323,6 +341,7 @@ class Coach:
                     and num_round < self.round_num):
                 self._encerrar_partida()
                 self._zerar_partida()
+                self._avisar_inicio()
 
             self.ultimo_pacote = time.time()
             self.mapa = nome_mapa or self.mapa
@@ -372,11 +391,20 @@ class Coach:
                     ativa = norm_arma(w.get("name"))
                     municao = w.get("ammo_clip")
                     break
-            if ativo and vivo and ativa is not None and municao is not None:
+            fim_aberto = lay == "rounds" and self._seg_aberto and self.fase_round in ("live", "over")
+            self._t_ult_proprio = agora
+            posic = jog.get("position")
+            if isinstance(posic, str):
+                try:
+                    self._pos = [round(float(v), 1) for v in posic.replace(" ", "").split(",")[:3]]
+                except ValueError:
+                    pass
+            if (ativo or fim_aberto) and ativa is not None and municao is not None and (vivo or ativo or fim_aberto):
                 if self._ultima_arma == ativa and self._ultima_municao is not None:
                     delta = self._ultima_municao - municao
                     if 0 < delta <= 12:
                         self._registrar_tiros(ativa, delta, agora)
+                        self._t_acao = agora
             if ativa is not None:
                 if ativa != self._ultima_arma:
                     self._fechar_rajada()
@@ -389,14 +417,30 @@ class Coach:
             if k is not None:
                 if self._kills_ant is not None and k > self._kills_ant:
                     novas = k - self._kills_ant
-                    self.r_kills += novas
-                    self._bucket()["kills"] += novas
-                    if self._ultima_arma:
-                        self.por_arma.setdefault(self._ultima_arma, {"tiros": 0, "kills": 0})["kills"] += novas
+                    arma_k = ativa or self._ultima_arma
                     hs_round = estado.get("round_killhs", 0) or 0
-                    if hs_round > self._hs_round_ant:
-                        self.hs_kills += hs_round - self._hs_round_ant
-                    self._log("kill", {"arma": self._ultima_arma})
+                    hs_novos = max(0, hs_round - self._hs_round_ant)
+                    tardia = lay == "rounds" and (not self._seg_aberto or (
+                        self._t_abertura is not None and agora - self._t_abertura < JANELA_KILL_TARDIA_S))
+                    if tardia and self.rounds:
+                        # kill que o jogo so informou depois: pertence ao round que acabou
+                        ult = self.rounds[-1]
+                        ult["kills"] += novas
+                        ult.setdefault("kills_det", []).append(
+                            {"arma": arma_k, "hs": hs_novos > 0, "t": None, "pos": None})
+                        self._log("kill", {"arma": arma_k, "tardia": True})
+                    else:
+                        self.r_kills += novas
+                        self._t_acao = agora
+                        t_r = round(agora - self._t_abertura, 1) if self._t_abertura else None
+                        for i in range(novas):
+                            self.r_kills_det.append({"arma": arma_k, "hs": i < hs_novos, "t": t_r,
+                                                     "pos": list(self._pos) if self._pos else None})
+                        self._log("kill", {"arma": arma_k})
+                    self._bucket()["kills"] += novas
+                    if arma_k:
+                        self.por_arma.setdefault(arma_k, {"tiros": 0, "kills": 0})["kills"] += novas
+                    self.hs_kills += hs_novos
                 self._kills_ant = k
                 self.kills = k
                 if self._seg_aberto and self._base_k is None:
@@ -415,7 +459,13 @@ class Coach:
                 self.mortes = d
             self.assistencias = ms.get("assists", self.assistencias)
             if "round_totaldmg" in estado:
-                self.r_dano = estado.get("round_totaldmg")
+                dn = estado.get("round_totaldmg") or 0
+                if self._seg_aberto and dn > self.r_dano_ant:
+                    self._t_acao = agora
+                    self.r_dano_ev.append({"t": round(agora - self._t_abertura, 1) if self._t_abertura else None,
+                                           "dano": dn - self.r_dano_ant, "arma": ativa or self._ultima_arma})
+                self.r_dano_ant = dn if self._seg_aberto or dn < self.r_dano_ant else self.r_dano_ant
+                self.r_dano = max(self.r_dano or 0, dn) if self._seg_aberto else self.r_dano
 
             flash = estado.get("flashed", 0) or 0
             if vida is not None:
@@ -457,6 +507,7 @@ class Coach:
         self._t_over = None
         self.t_vida = None if entrou_no_meio else agora    # sem inicio conhecido: nao julga "morte cedo"
         self._base_k = self._kills_ant
+        self._t_abertura = agora
         self._d_pend = 0
         self._d_adiant = 0
         self._tiros_recentes.clear()
@@ -494,7 +545,11 @@ class Coach:
             if self.layout != "rounds":
                 self._finalizar_vida(None)
             return
-        tiros = sum(n for t, n in self._tiros_recentes if agora - t <= JANELA_SEM_ATIRAR_S)
+        ref = agora if origem == "vida" else (self._t_ult_proprio or agora)
+        tiros = sum(n for t, n in self._tiros_recentes if ref - t <= JANELA_SEM_ATIRAR_S)
+        if self._t_acao is not None and ref - self._t_acao <= JANELA_SEM_ATIRAR_S:
+            tiros = max(tiros, 1)       # atirou, causou dano ou matou ha pouco
+        self.r_pos_morte = list(self._pos) if self._pos else None
         self._fechar_rajada()
         desde = (agora - self.t_vida) if self.t_vida else None
         rounds = self.layout == "rounds"
@@ -502,10 +557,12 @@ class Coach:
         self._log("morte", {"tiros_antes": tiros, "flash": self._flash_ant,
                             "desde_inicio_s": round(desde, 1) if desde is not None else None})
         if tiros == 0:
-            self.mortes_sem_atirar += 1
-            self.alerta("sem_atirar", "Você morreu sem atirar. Antes de entrar, use som/utilitária e pré-mire o ângulo."
-                        if rounds else "Você morreu sem atirar. Olhe para onde o inimigo pode vir e mantenha a mira na altura da cabeça.",
-                        "ruim", 0)
+            if rounds:
+                self._sem_atirar_pend = True   # confirma no fim do round, quando kills/dano ja chegaram
+            else:
+                self.mortes_sem_atirar += 1
+                self.alerta("sem_atirar", "Você morreu sem atirar. Olhe para onde o inimigo pode vir e mantenha a mira na altura da cabeça.",
+                            "ruim", 0)
         if self._flash_ant and self._flash_ant > 50:
             self.mortes_cego += 1
             self.alerta("cego", "Morte enquanto cego por flash: vire de costas ou saia da linha de visão.", "aviso", 0)
@@ -545,13 +602,21 @@ class Coach:
         if not self.r_morreu and self._d_pend > 0:
             self._d_pend -= 1
             self._morte(time.monotonic(), origem="placar", tardia=True)
+        if self._sem_atirar_pend:
+            self._sem_atirar_pend = False
+            if self.r_kills == 0 and not (self.r_dano or 0) and self.r_tiros == 0:
+                self.mortes_sem_atirar += 1
+                self.alerta("sem_atirar", "Você morreu sem atirar. Antes de entrar, use som/utilitária e pré-mire o ângulo.",
+                            "ruim", 0)
         if self.r_morreu:
             self.mortes_seguidas += 1
         else:
             self.mortes_seguidas = 0
         self.rounds.append({"round": self.round_num, "kills": self.r_kills, "morreu": self.r_morreu,
                             "tiros": self.r_tiros, "rajadas": self.r_rajadas,
-                            "rajadas_longas": self.r_rajadas_longas, "dano": self.r_dano})
+                            "rajadas_longas": self.r_rajadas_longas, "dano": self.r_dano,
+                            "kills_det": self.r_kills_det, "dano_ev": self.r_dano_ev,
+                            "pos_morte": self.r_pos_morte})
         if self.mortes_seguidas >= 3:
             self.alerta("tilt", f"{self.mortes_seguidas} rounds seguidos morrendo. Respire fundo, solte o mouse "
                                 "e reinicie o foco no próximo round.", "ruim", 0)
@@ -616,10 +681,16 @@ class Coach:
         lay = self.layout
         out = []
         if lay == "rounds":
+            def como(x):
+                partes = []
+                for kd in x.get("kills_det") or []:
+                    t = f" aos {kd['t']:.0f}s" if kd.get("t") is not None else ""
+                    partes.append(f"{kd.get('arma') or '?'}{' (HS)' if kd.get('hs') else ''}{t}")
+                return ", ".join(partes) or "—"
             linhas = [[x["round"], x["kills"], "sim" if x["morreu"] else "não", x["tiros"],
-                       x["rajadas_longas"], "—" if x["dano"] is None else x["dano"]]
+                       x["rajadas_longas"], "—" if x["dano"] is None else x["dano"], como(x)]
                       for x in reversed(self.rounds[-30:])]
-            out.append({"titulo": "Rounds", "colunas": ["Round", "Kills", "Morreu", "Tiros", "Rajadas 7+", "Dano"],
+            out.append({"titulo": "Rounds", "colunas": ["Round", "Kills", "Morreu", "Tiros", "Rajadas 7+", "Dano", "Como foram as kills"],
                         "linhas": linhas})
         elif lay == "vidas":
             linhas = [[x["vida"], x["kills"], "—" if x["duracao"] is None else f"{x['duracao']}s",
@@ -900,6 +971,7 @@ def conteudo_cfg(porta: int, token: str) -> str:
         "player_state" "1"
         "player_weapons" "1"
         "player_match_stats" "1"
+        "player_position" "1"
     }}
 }}
 '''
@@ -959,6 +1031,21 @@ def instalar(porta: int, token: str):
         print(f"Criei o arquivo aqui: {destino}")
         print("Copie-o para a pasta:  ...\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\cfg")
         print("(Steam > clique direito no CS2 > Gerenciar > Explorar arquivos locais > game > csgo > cfg)")
+
+
+def migrar_cfg(porta: int, token: str) -> bool:
+    """Se o arquivo de integracao ja instalado e de uma versao antiga (sem posicao do jogador), reescreve.
+    Retorna True se alterou algum arquivo (o CS2 precisa ser reiniciado para valer)."""
+    mudou = False
+    for lib in bibliotecas_steam():
+        arq = lib / "steamapps" / "common" / "Counter-Strike Global Offensive" / "game" / "csgo" / "cfg" / "gamestate_integration_cs2coach.cfg"
+        try:
+            if arq.exists() and '"player_position"' not in arq.read_text(encoding="utf-8", errors="ignore"):
+                arq.write_text(conteudo_cfg(porta, token), encoding="utf-8")
+                mudou = True
+        except OSError:
+            pass
+    return mudou
 
 
 def diagnostico(porta: int, token: str):

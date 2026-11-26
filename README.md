@@ -63,3 +63,12 @@ numeração `5.0.N` (N sobe sozinho a cada commit). Ninguém precisa criar tag n
 
 ## Linha de comando (avançado)
 `python app\hub.py --help` · `python app\analisar_demo.py arquivo.dem --jogador SeuNick` · `python app\ao_vivo.py --diagnostico`
+
+
+## Novidades (ao vivo, configuração e janela)
+
+- **Avisos ao vivo mais confiáveis**: "morreu sem atirar" só aparece se não houve tiro, dano nem kill nos últimos 4 s (e é confirmado no fim do round, quando kills e dano já chegaram). Kills que o jogo informa atrasadas entram no round certo.
+- **Dano e kills por round ao vivo**: dano causado, arma e momento de cada kill, headshot e posição. Distância do alvo e local do acerto o jogo **não informa ao vivo**; esses dados vêm das demos (aba "Kills e mortes" de cada partida: dano por round, onde acertou e distância).
+- **Configuração sempre atual**: o CS2 Coach relê a sua configuração (sens, mira, vídeo) ao começar cada partida ao vivo, antes de analisar demos e a cada 20 s. O valor mais recentemente gravado vence (autoexec ou opções do jogo).
+- Janela com cantos arredondados, barra de título na cor do app e ícone próprio na barra de tarefas. Se o ícone antigo continuar, desafixe e fixe de novo o atalho.
+- O arquivo de integração agora também pede a posição do jogador; o CS2 Coach atualiza o arquivo sozinho e pede para reiniciar o CS2 uma vez.
