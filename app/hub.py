@@ -301,7 +301,7 @@ def ajustes_config():
 # Tabelas reutilizaveis
 # --------------------------------------------------------------------------
 # armas parecidas que reaproveitam o desenho de outra
-ICONE_ALIAS = {"incgrenade": "inferno", "molotov": "inferno", "usp": "usp_silencer", "p2000": "hkp2000"}
+ICONE_ALIAS = {"molotov": "inferno", "usp": "usp_silencer", "p2000": "hkp2000"}
 
 
 def icone_arma(arma, altura=26):
