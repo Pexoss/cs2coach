@@ -812,13 +812,14 @@ def iniciar_analise(demos, steamid, nick, refazer, auto=False):
 
 def pg_analisar():
     aj = armazem.ajustes_todos()
-    pasta = aj.get("pasta_demos", "")
+    cadastradas = lista_pastas_demos()
+    pasta = cadastradas[0] if cadastradas else ""
     sugestao = ""
     jogo = config_cs.achar_pasta_jogo_cfg()
     if jogo:
         sugestao = str(jogo.parent)       # ...\game\csgo (onde o jogo salva as demos baixadas)
     exemplo_pasta = sugestao or "C:\\...\\game\\csgo"
-    campos_pasta = (f"<label>Pasta ou arquivo .dem</label><input type='text' name='caminho' value='{esc(pasta)}' "
+    campos_pasta = (f"<label>Pasta ou arquivo .dem (analisar agora)</label><input type='text' name='caminho' value='{esc(pasta)}' "
                     f"placeholder='{esc(exemplo_pasta)}'>")
     sid = steam_do_usuario()
     avisos = ""
@@ -829,14 +830,14 @@ def pg_analisar():
             + f"<form method='post' action='/acao/analisar'><input type='hidden' name='t' value='{E.token}'>{campos_pasta}"
               "<label>Seu nick (opcional: o Hub já usa o seu SteamID)</label><input type='text' name='nick' value=''>"
               "<label><input type='checkbox' name='refazer' value='1' style='width:auto'> Refazer demos que já estão no Hub</label>"
-              "<p><button>Analisar</button></p></form>")
+              "<p><button>Analisar</button></p></form>" + bloco_pastas_demos("/analisar"))
     exemplos = ""
-    if pasta:
-        demos, _ = _demos_do_caminho(pasta)
-        if demos:
-            itens = "".join(f"<li><code>{esc(d.name)}</code> <span class='sub'>{d.stat().st_size // 1_000_000} MB · "
-                            f"{datetime.fromtimestamp(d.stat().st_mtime):%d/%m/%Y %H:%M}</span></li>" for d in demos[-15:])
-            exemplos = f"<h2>Demos na pasta salva ({len(demos)})</h2><ul>{itens}</ul>"
+    demos = todas_as_demos()
+    if demos:
+        itens = "".join(f"<li><code>{esc(d.name)}</code> <span class='sub'>{esc(d.parent.name)} · {d.stat().st_size // 1_000_000} MB · "
+                        f"{datetime.fromtimestamp(d.stat().st_mtime):%d/%m/%Y %H:%M}</span></li>" for d in demos[-15:])
+        exemplos = (f"<h2>Demos nas pastas vigiadas ({len(demos)})</h2><ul>{itens}</ul>"
+                    + form_post("analisar-todas", "", "Analisar todas as demos das pastas", ""))
     with E.lock:
         t = dict(E.tarefa) if E.tarefa else None
         linhas = list(t["linhas"]) if t else []
@@ -908,11 +909,43 @@ def vigia_atualizacao():
 
 
 # ---- importacao automatica de demos ----
+def lista_pastas_demos():
+    """Pastas de demos cadastradas pelo usuario (varias). Mantem compatibilidade com o ajuste antigo (uma so)."""
+    bruto = (armazem.ajuste_get("pastas_demos") or "") + "\n" + (armazem.ajuste_get("pasta_demos") or "")
+    out = []
+    for linha in bruto.splitlines():
+        t = linha.strip().strip('"')
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def salvar_pastas_demos(lista):
+    limpas = []
+    for t in lista:
+        t = t.strip().strip('"')
+        if t and t not in limpas:
+            limpas.append(t)
+    armazem.ajuste_set("pastas_demos", "\n".join(limpas))
+    armazem.ajuste_set("pasta_demos", "")      # o ajuste antigo foi absorvido pela lista
+
+
+def listar_dems(pasta, profundidade=2):
+    """.dem da pasta e de subpastas (ate `profundidade` niveis), para achar demos organizadas em subpastas."""
+    achados = []
+    try:
+        for item in pasta.iterdir():
+            if item.is_file() and item.suffix.lower() == ".dem":
+                achados.append(item)
+            elif item.is_dir() and profundidade > 0 and not item.name.startswith("."):
+                achados.extend(listar_dems(item, profundidade - 1))
+    except OSError:
+        pass
+    return achados
+
+
 def pastas_de_demos():
-    cands = []
-    pd = (armazem.ajuste_get("pasta_demos") or "").strip().strip('"')
-    if pd:
-        cands.append(Path(pd))
+    cands = [Path(t) for t in lista_pastas_demos()]
     jogo = config_cs.achar_pasta_jogo_cfg()
     if jogo:
         cands.append(jogo.parent)          # ...\game\csgo: onde o CS2 salva as demos baixadas
@@ -921,6 +954,46 @@ def pastas_de_demos():
         if c.is_dir() and c not in out:
             out.append(c)
     return out
+
+
+def todas_as_demos():
+    jogo = config_cs.achar_pasta_jogo_cfg()
+    pasta_jogo = jogo.parent if jogo else None
+    vistos, out = set(), []
+    for pasta in pastas_de_demos():
+        for d in listar_dems(pasta, 0 if pasta == pasta_jogo else 2):   # a pasta do jogo tem subpastas que nao interessam
+            if d not in vistos:
+                vistos.add(d)
+                out.append(d)
+
+    def quando(d):
+        try:
+            return d.stat().st_mtime
+        except OSError:
+            return 0
+    return sorted(out, key=quando)
+
+
+def bloco_pastas_demos(volta):
+    """Gerenciador de pastas de demos (formularios proprios; nao pode ficar dentro de outro <form>)."""
+    cadastradas = lista_pastas_demos()
+    jogo = config_cs.achar_pasta_jogo_cfg()
+    linhas = ""
+    for i, t in enumerate(cadastradas):
+        existe = Path(t).is_dir()
+        linhas += (f"<li><code>{esc(t)}</code> " + ("" if existe else "<span class='sub'>(pasta não encontrada)</span> ")
+                   + form_post("rem-pasta", f"<input type='hidden' name='i' value='{i}'><input type='hidden' name='volta' value='{esc(volta)}'>",
+                               "Remover", "sec") + "</li>")
+    if jogo:
+        linhas += f"<li><code>{esc(str(jogo.parent))}</code> <span class='sub'>(pasta do jogo, sempre vigiada)</span></li>"
+    if not linhas:
+        linhas = "<li>nenhuma pasta ainda</li>"
+    add = (f"<form method='post' action='/acao/add-pasta'><input type='hidden' name='t' value='{E.token}'>"
+           f"<input type='hidden' name='volta' value='{esc(volta)}'>"
+           "<label>Adicionar pasta de demos</label><input type='text' name='caminho' placeholder='D:\\Demos\\Faceit'>"
+           "<small>Pode adicionar quantas quiser, de discos diferentes. O Hub também olha as subpastas (2 níveis).</small>"
+           "<p><button>Adicionar pasta</button></p></form>")
+    return ("<h2>Pastas de demos</h2><ul>" + linhas + "</ul>" + add)
 
 
 def auto_ligado():
@@ -941,18 +1014,20 @@ def vigia_demos():
                 if E.tarefa and E.tarefa.get("ativa"):
                     continue
             agora, novas = time.time(), []
-            for pasta in pastas_de_demos():
-                for d in pasta.glob("*.dem"):
+            for d in todas_as_demos():
+                try:
                     st = d.stat()
-                    sig = (st.st_size, int(st.st_mtime))
-                    if E.auto["vistos"].get(str(d)) == sig:
-                        continue
-                    if agora - st.st_mtime < 20:          # ainda esta sendo gravada pelo jogo
-                        continue
-                    E.auto["vistos"][str(d)] = sig
-                    if agora - st.st_mtime > 30 * 86400:  # demos muito antigas: so sob pedido
-                        continue
-                    novas.append(d)
+                except OSError:
+                    continue
+                sig = (st.st_size, int(st.st_mtime))
+                if E.auto["vistos"].get(str(d)) == sig:
+                    continue
+                if agora - st.st_mtime < 20:          # ainda esta sendo gravada pelo jogo
+                    continue
+                E.auto["vistos"][str(d)] = sig
+                if agora - st.st_mtime > 30 * 86400:  # demos muito antigas: so sob pedido
+                    continue
+                novas.append(d)
             if novas:
                 E.auto["ultima"] = time.time()
                 iniciar_analise(novas, sid, None, False, auto=True)
@@ -1252,7 +1327,7 @@ def pg_ajustes():
             + ("<div class='campo'><label>Analisar demos novas automaticamente</label><select name='auto_demos'>"
                f"<option value='1'{' selected' if auto_ligado() else ''}>Sim (recomendado)</option>"
                f"<option value='0'{'' if auto_ligado() else ' selected'}>Não</option></select>"
-               "<small>O Hub confere a pasta do jogo (e a pasta de demos abaixo) a cada 15 segundos.</small></div>")
+               "<small>O Hub confere a pasta do jogo (e todas as pastas de demos cadastradas) a cada 15 segundos.</small></div>")
             + ("<div class='campo'><label>Avisar quando houver versão nova</label><select name='avisar_atualizacao'>"
                f"<option value='1'{'' if (aj.get('avisar_atualizacao') or '1') == '0' else ' selected'}>Sim</option>"
                f"<option value='0'{' selected' if (aj.get('avisar_atualizacao') or '1') == '0' else ''}>Não</option></select>"
@@ -1267,7 +1342,6 @@ def pg_ajustes():
                     "O treino (mapas da oficina) nunca conta; modos de diversão ficam de fora a menos que você os inclua aqui.")
             + campo("dpi", "DPI do mouse", aj.get("dpi"), "Usado para calcular o eDPI e a distância de 360°.")
             + campo("hz", "Taxa de atualização do monitor (Hz)", aj.get("hz"), "Ex.: 144, 165, 240.")
-            + campo("pasta_demos", "Pasta das demos", aj.get("pasta_demos"), "Onde ficam os arquivos .dem.")
             + campo("pasta_cfg_usuario", "Pasta de configuração do usuário (opcional)", aj.get("pasta_cfg_usuario"),
                     "Só preencha se o Hub não achar sozinho: ...\\Steam\\userdata\\&lt;número&gt;\\730\\local\\cfg")
             + campo("pasta_cfg_jogo", "Pasta cfg do jogo (opcional)", aj.get("pasta_cfg_jogo"),
@@ -1280,7 +1354,8 @@ def pg_ajustes():
     dados = (atual + f"<h2>Seus dados</h2><p>Tudo fica em <code>{esc(str(armazem.CAMINHO_DB))}</code> ({tamanho} KB). Para fazer backup, "
              "copie a pasta <code>dados</code>; para começar do zero, apague-a (com o Hub fechado). Nada sai do seu computador.</p>"
              "<p><a class='btn sec' href='/exportar.json'>Exportar resumo (JSON)</a></p>")
-    return pagina("Ajustes", f"<h1>Ajustes</h1><div class='sub'>CS2 Coach versão {esc(VERSAO)}</div>{form}<h2>Contas do Steam neste PC</h2><ul>{pastas}</ul>{dados}", "/ajustes")
+    bloco_pastas = bloco_pastas_demos("/ajustes")
+    return pagina("Ajustes", f"<h1>Ajustes</h1><div class='sub'>CS2 Coach versão {esc(VERSAO)}</div>{form}{bloco_pastas}<h2>Contas do Steam neste PC</h2><ul>{pastas}</ul>{dados}", "/ajustes")
 
 
 def exportar_json():
@@ -1402,7 +1477,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _acao(self, acao, c):
         if acao == "ajustes":
-            for k in ("meu_steamid", "auto_demos", "avisar_atualizacao", "repo_github", "sens", "dpi", "hz", "modos_contam", "pasta_demos", "pasta_cfg_usuario", "pasta_cfg_jogo"):
+            for k in ("meu_steamid", "auto_demos", "avisar_atualizacao", "repo_github", "sens", "dpi", "hz", "modos_contam", "pasta_cfg_usuario", "pasta_cfg_jogo"):
                 if k in c:
                     v = c[k].strip().strip('"')
                     if k in ("meu_steamid", "sens", "dpi", "hz") and v and not v.replace(".", "", 1).isdigit():
@@ -1428,10 +1503,45 @@ class Handler(BaseHTTPRequestHandler):
                 with E.lock:
                     E.mensagem = "Não encontrei nenhum arquivo .dem nesse caminho."
                 return self._redirecionar("/analisar")
-            if pasta and Path(texto).is_dir():
-                armazem.ajuste_set("pasta_demos", texto)
+            if pasta and Path(texto).is_dir() and texto.strip().strip('"') not in lista_pastas_demos():
+                salvar_pastas_demos(lista_pastas_demos() + [texto])
             ok = iniciar_analise(demos, steam_do_usuario(), (c.get("nick") or "").strip(), c.get("refazer") == "1")
             if not ok:
+                with E.lock:
+                    E.mensagem = "Já existe uma análise em andamento. Aguarde terminar."
+            return self._redirecionar("/analisar")
+        if acao == "add-pasta":
+            destino = c.get("volta") if c.get("volta") in ("/ajustes", "/analisar") else "/analisar"
+            novo = (c.get("caminho") or "").strip().strip('"')
+            if not novo or not Path(novo).expanduser().is_dir():
+                with E.lock:
+                    E.mensagem = "Essa pasta não existe neste computador. Confira o caminho (ex.: D:\\Demos)."
+                return self._redirecionar(destino)
+            atuais = lista_pastas_demos()
+            if novo in atuais:
+                with E.lock:
+                    E.mensagem = "Essa pasta já está na lista."
+            else:
+                salvar_pastas_demos(atuais + [novo])
+                with E.lock:
+                    E.mensagem = "Pasta adicionada. O Hub vai procurar demos nela a cada 15 segundos."
+            return self._redirecionar(destino)
+        if acao == "rem-pasta":
+            destino = c.get("volta") if c.get("volta") in ("/ajustes", "/analisar") else "/analisar"
+            atuais = lista_pastas_demos()
+            if (c.get("i") or "").isdigit() and int(c["i"]) < len(atuais):
+                atuais.pop(int(c["i"]))
+                salvar_pastas_demos(atuais)
+                with E.lock:
+                    E.mensagem = "Pasta removida da lista (os arquivos não foram apagados)."
+            return self._redirecionar(destino)
+        if acao == "analisar-todas":
+            demos = todas_as_demos()
+            if not demos:
+                with E.lock:
+                    E.mensagem = "Não encontrei nenhum arquivo .dem nas pastas cadastradas."
+                return self._redirecionar("/analisar")
+            if not iniciar_analise(demos, steam_do_usuario(), None, False):
                 with E.lock:
                     E.mensagem = "Já existe uma análise em andamento. Aguarde terminar."
             return self._redirecionar("/analisar")
@@ -1541,12 +1651,12 @@ def iniciar_bandeja(url, parar):
         from PIL import Image, ImageDraw
     except Exception:
         return False
-    img = Image.new("RGBA", (64, 64), (15, 18, 24, 255))
-    d = ImageDraw.Draw(img)
-    cor = (76, 194, 255, 255)
-    d.ellipse((14, 14, 50, 50), outline=cor, width=4)
-    for ln in ((32, 2, 32, 22), (32, 42, 32, 62), (2, 32, 22, 32), (42, 32, 62, 32)):
-        d.line(ln, fill=cor, width=4)
+    try:
+        from icone_app import desenhar
+        img = desenhar(64)
+    except Exception:
+        img = Image.new("RGBA", (64, 64), (15, 18, 24, 255))
+        ImageDraw.Draw(img).ellipse((14, 14, 50, 50), outline=(76, 194, 255, 255), width=4)
 
     def abrir(icon, item):
         webbrowser.open(url)

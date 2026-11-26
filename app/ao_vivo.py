@@ -62,6 +62,7 @@ ARMA_PARA_CLASSE = {a: c for c, armas in CLASSES.items() for a in armas}
 AUTOMATICAS = {"rifle", "smg", "metralhadora"}
 GAP_RAJADA_S = 0.35          # pausa que encerra uma rajada
 JANELA_SEM_ATIRAR_S = 1.5    # janela para "morreu sem atirar"
+GRACA_FIM_ROUND_S = 20.0     # apos o fim do round, espera ate isto por kills/mortes atrasados antes de fechar o resumo
 MORTE_CEDO_S = 20.0          # morte nos primeiros segundos do round
 COOLDOWN_ALERTA_S = 20.0
 
@@ -180,6 +181,12 @@ class Coach:
         self._vida_ant = None
         self._flash_ant = 0
         self._kills_ant = None
+        self._deaths_ant = None   # ultimo total de mortes visto em pacote proprio
+        self._d_pend = 0          # mortes que o placar mostrou e a vida zerada ainda nao confirmou
+        self._d_adiant = 0        # mortes vistas pela vida/observador antes de o placar subir
+        self._seg_aberto = False  # ha um round em andamento (ou esperando eventos atrasados)
+        self._t_over = None
+        self._base_k = None       # total de kills no inicio do round
         self._salvo = False
         self._tiros_recentes = deque(maxlen=200)  # (t_monotonico, n)
         self._rajada = None
@@ -193,8 +200,8 @@ class Coach:
         self.r_morreu = False
         self.r_dano = None
         self.t_vida = None
-        self._r_finalizado = False
         self._hs_round_ant = 0
+        self._morte_origem = None
 
     def definir_modo(self, novo: str) -> bool:
         with self.lock:
@@ -325,43 +332,27 @@ class Coach:
                                f"{mapa.get('team_t', {}).get('score', 0)} T")
 
             meu = prov.get("steamid")
-            if jog.get("steamid") and meu and jog.get("steamid") != meu:
-                # o jogo passou a mostrar outro jogador: se voce estava vivo, voce morreu
-                if (lay != "treino" and self._em_jogo(rnd.get("phase", self.fase_round))
-                        and self._vida_ant and self._vida_ant > 0):
+            proprio = not (jog.get("steamid") and meu and jog.get("steamid") != meu)
+            nova_fase = rnd.get("phase", self.fase_round)
+
+            # 1) fases e rounds: o bloco "round" vale mesmo quando o jogo mostra outro jogador (voce morto, observando)
+            if lay == "rounds":
+                self._fase_round(nova_fase, num_round, agora)
+            else:
+                self.fase_round = nova_fase
+
+            if not proprio:
+                # o jogo passou a mostrar outro jogador. So conta como morte se o round estava rolando
+                # (nao no congelamento nem depois do fim) e voce estava vivo no ultimo pacote seu.
+                no_ar = self.fase_round == "live" and (self.fase_mapa == "live" or lay != "rounds")
+                if lay != "treino" and no_ar and self._vida_ant and self._vida_ant > 0:
                     self._vida_ant = 0
-                    self._morte(agora)
+                    self._morte(agora, origem="observador")
+                self._checar_fim()
                 return
             if jog.get("name"):
                 self.nome = jog["name"]
             self.steamid = meu or self.steamid
-
-            nova_fase = rnd.get("phase", self.fase_round)
-            if lay == "rounds":
-                if num_round is not None and num_round != self.round_num:
-                    if self.round_num is not None:
-                        self._finalizar_round()
-                    self.round_num = num_round
-                    self._zerar_round()
-                    self._ultima_arma = None
-                    self._ultima_municao = None
-                if nova_fase != self.fase_round:
-                    if nova_fase == "live":
-                        self._tiros_recentes.clear()
-                        self._rajada = None
-                        self.t_vida = agora
-                        self._ultima_arma, self._ultima_municao = None, None
-                        self._vida_ant = None
-                    if nova_fase == "over":
-                        self._fechar_rajada()
-                        self._finalizar_round()
-                    self.fase_round = nova_fase
-            else:
-                self.fase_round = nova_fase
-            if self.fase_mapa == "gameover":
-                self._fechar_rajada()
-                self._encerrar_partida()
-                return
 
             estado = jog.get("state", {}) or {}
             ms = jog.get("match_stats", {}) or {}
@@ -391,7 +382,9 @@ class Coach:
                     self._fechar_rajada()
                 self._ultima_arma, self._ultima_municao = ativa, municao
 
-            # --- kills ---------------------------------------------------------
+            # --- kills: o placar da partida e a fonte da verdade -------------------
+            # Kills que chegam atrasados (no pacote do fim do round) continuam valendo para o round
+            # que acabou, porque o resumo so fecha depois da carencia (ver _fase_round/_tick).
             k = ms.get("kills")
             if k is not None:
                 if self._kills_ant is not None and k > self._kills_ant:
@@ -406,19 +399,76 @@ class Coach:
                     self._log("kill", {"arma": self._ultima_arma})
                 self._kills_ant = k
                 self.kills = k
+                if self._seg_aberto and self._base_k is None:
+                    self._base_k = k
             self._hs_round_ant = estado.get("round_killhs", 0) or 0
-            self.mortes = ms.get("deaths", self.mortes)
+
+            # --- mortes: o placar confirma, a vida zerada mede o instante --------------
+            d = ms.get("deaths")
+            if d is not None:
+                if self._deaths_ant is not None and d > self._deaths_ant:
+                    novas_m = d - self._deaths_ant
+                    usadas = min(novas_m, self._d_adiant)
+                    self._d_adiant -= usadas
+                    self._d_pend += novas_m - usadas
+                self._deaths_ant = d
+                self.mortes = d
             self.assistencias = ms.get("assists", self.assistencias)
             if "round_totaldmg" in estado:
                 self.r_dano = estado.get("round_totaldmg")
 
-            # --- morte / renascimento ---------------------------------------------
             flash = estado.get("flashed", 0) or 0
             if vida is not None:
-                if ativo and self._vida_ant is not None and self._vida_ant > 0 and vida == 0:
+                # mortes no fim do round (fase "over") tambem contam, desde que o round ainda esteja aberto
+                pode = ativo or (lay == "rounds" and self._seg_aberto and self.fase_round in ("live", "over"))
+                if pode and self._vida_ant is not None and self._vida_ant > 0 and vida == 0:
                     self._morte(agora)
                 self._vida_ant = vida
                 self._flash_ant = flash if vida > 0 else self._flash_ant
+
+            # pacote seu depois do fim do round, ja no congelamento: placar e vida estao atualizados, pode fechar
+            if lay == "rounds" and self._seg_aberto and self.fase_round == "freezetime":
+                self._finalizar_round()
+            self._checar_fim()
+
+    def _checar_fim(self):
+        if self.fase_mapa == "gameover":
+            self._fechar_rajada()
+            self._encerrar_partida()
+
+    # ---- ciclo do round -------------------------------------------------
+    def _fase_round(self, nova_fase, num_round, agora):
+        """Abre o round quando comecar a valer ("live") e so fecha depois que kills/mortes finais chegaram."""
+        antes = self.fase_round
+        if nova_fase == "over" and antes != "over":
+            self._fechar_rajada()
+            self._t_over = agora
+        if nova_fase == "live" and (antes != "live" or not self._seg_aberto) and self.fase_mapa != "gameover":
+            self._finalizar_round()
+            self._abrir_round(num_round, agora, entrou_no_meio=antes not in ("freezetime", "over"))
+        self.fase_round = nova_fase
+        self._tick(agora)
+
+    def _abrir_round(self, num_round, agora, entrou_no_meio):
+        self._zerar_round()
+        if num_round is not None:
+            self.round_num = num_round
+        self._seg_aberto = True
+        self._t_over = None
+        self.t_vida = None if entrou_no_meio else agora    # sem inicio conhecido: nao julga "morte cedo"
+        self._base_k = self._kills_ant
+        self._d_pend = 0
+        self._d_adiant = 0
+        self._tiros_recentes.clear()
+        self._rajada = None
+        self._ultima_arma, self._ultima_municao = None, None
+        self._vida_ant = None
+
+    def _tick(self, agora):
+        """Fecha o round se a carencia depois do fim terminou (chamado a cada pacote e a cada consulta do painel)."""
+        if (self._seg_aberto and self.fase_round == "over" and self._t_over is not None
+                and agora - self._t_over >= GRACA_FIM_ROUND_S):
+            self._finalizar_round()
 
     # ---- eventos de alto nivel -------------------------------------------
     def _iniciar_vida(self, agora):
@@ -429,10 +479,21 @@ class Coach:
         self._rajada = None
         self._ultima_arma, self._ultima_municao = None, None
 
-    def _morte(self, agora):
+    def _morte(self, agora, origem="vida", tardia=False):
         if self.layout == "treino":
             return
         self.r_morreu = True
+        self._morte_origem = origem
+        if not tardia:
+            if self._d_pend > 0:
+                self._d_pend -= 1        # o placar ja tinha mostrado esta morte
+            else:
+                self._d_adiant += 1      # o placar ainda vai mostrar
+        if tardia:
+            self._log("morte", {"tardia": True})
+            if self.layout != "rounds":
+                self._finalizar_vida(None)
+            return
         tiros = sum(n for t, n in self._tiros_recentes if agora - t <= JANELA_SEM_ATIRAR_S)
         self._fechar_rajada()
         desde = (agora - self.t_vida) if self.t_vida else None
@@ -474,9 +535,16 @@ class Coach:
             self.alerta("vida_boa", f"Vida forte: {self.r_kills} kills sem morrer.", "bom", 10)
 
     def _finalizar_round(self):
-        if self._r_finalizado or self.round_num is None:
+        if not self._seg_aberto or self.round_num is None:
             return
-        self._r_finalizado = True
+        self._seg_aberto = False
+        # reconcilia com o placar: kills do round = total agora - total no inicio do round (nunca diminui)
+        if self._base_k is not None and self.kills is not None and self.kills - self._base_k > self.r_kills:
+            self.r_kills = self.kills - self._base_k
+        # o placar mostrou uma morte que a vida zerada nao pegou (pacotes juntos): voce morreu neste round
+        if not self.r_morreu and self._d_pend > 0:
+            self._d_pend -= 1
+            self._morte(time.monotonic(), origem="placar", tardia=True)
         if self.r_morreu:
             self.mortes_seguidas += 1
         else:
@@ -494,6 +562,7 @@ class Coach:
                         "aviso", 0)
 
     def _encerrar_partida(self):
+        self._finalizar_round()
         if self._salvo or not (self.rounds or self.vidas or self.minutos or self.eventos):
             return
         self._salvo = True
@@ -574,6 +643,8 @@ class Coach:
         return out
 
     def resumo(self):
+        with self.lock:
+            self._tick(time.monotonic())
         rifle = self._rifle()
         n_raj = rifle["tap"] + rifle["curta"] + rifle["media"] + rifle["longa"]
         return {
