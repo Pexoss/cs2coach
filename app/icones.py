@@ -8,6 +8,9 @@ Quer as imagens reais do jogo? Coloque PNGs na pasta  dados/armas_img/  com o no
 from __future__ import annotations
 
 import re
+import struct
+import sys
+from pathlib import Path
 
 import armas as armas_mod
 
@@ -121,6 +124,25 @@ def svg_arma(arma: str, altura: int = 30) -> str:
     f = FORMA.get(a, "pistol" if armas_mod.tipo_arma(a) == "arma" else "?")
     return (f'<svg class="icarma" viewBox="0 0 120 40" height="{altura}" role="img" aria-label="{a}" fill="{_COR}">'
             f'{_forma(f)}</svg>')
+
+
+_INCLUIDAS = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "armas_img"
+
+
+def arquivo_incluido(nome: str):
+    """PNG branco com fundo transparente que vem junto com o programa (tingido pelo tema na tela)."""
+    f = _INCLUIDAS / f"{nome}.png"
+    return f if nome_png_valido(nome) and f.is_file() else None
+
+
+def tamanho_png(caminho):
+    """(largura, altura) lendo so o cabecalho do PNG (sem precisar do Pillow)."""
+    try:
+        with open(caminho, "rb") as f:
+            cab = f.read(24)
+        return struct.unpack(">II", cab[16:24])
+    except Exception:
+        return (300, 90)
 
 
 def nome_png_valido(nome: str) -> bool:

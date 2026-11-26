@@ -40,6 +40,7 @@ import armas as armas_mod  # noqa: E402
 import armazem  # noqa: E402
 import config_cs  # noqa: E402
 import icones  # noqa: E402
+import janela as janela_mod  # noqa: E402
 import metricas as metricas_mod  # noqa: E402
 from versao import REPO, VERSAO  # noqa: E402
 
@@ -64,6 +65,8 @@ class Estado:
         self.mensagem = None                       # aviso de uma acao (mostrado uma vez)
         self.update = None                         # {'versao','url','download','notas'} se houver versao nova
         self.update_erro = None
+        self.mostrar_janela = None                 # funcao que traz a janela do programa para frente
+        self.parar = threading.Event()             # 'Sair' no icone da bandeja
         self.dl = None                             # download da versao nova: {'estado','bytes','total','arquivo','erro'}
         self.auto = {"vistos": {}, "ultima": None}   # importacao automatica de demos
 
@@ -139,56 +142,113 @@ def grafico_linha(pontos, titulo, sufixo="", cor="#4cc2ff", casas=0):
 # Layout
 # --------------------------------------------------------------------------
 CSS = """
-:root{--bg:#0f1218;--card:#181d27;--card2:#202736;--tx:#e8ecf3;--mut:#93a0b5;--ac:#4cc2ff;--ok:#4cd68a;--ruim:#ff6b6b;--warn:#ffc857}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+:root{--bg:#202020;--side:#202020;--card:#2b2b2b;--card2:#353535;--stroke:#3b3b3b;--tx:#ffffff;--mut:#b4b4b4;--ac:#60cdff;--onac:#00253a;
+--ok:#6ccb5f;--ruim:#ff99a4;--warn:#fcc84a;--hover:rgba(255,255,255,.06);--sel:rgba(255,255,255,.09);--sombra:0 2px 8px rgba(0,0,0,.25);
+--p-dados-bg:#2f2a4d;--p-dados-tx:#cdbdff;--p-live-bg:#143a47;--p-live-tx:#8fdcf0;--p-ruim-bg:#4a2329;--p-ruim-tx:#ffb3ba;--p-ok-bg:#1f3b2a;--p-ok-tx:#9be6bd;--perigo-bg:#5a2b32;--perigo-tx:#ffd5d9}
+@media (prefers-color-scheme:light){:root{--bg:#f3f3f3;--side:#f3f3f3;--card:#ffffff;--card2:#f0f0f0;--stroke:#e3e3e3;--tx:#1a1a1a;--mut:#5f5f5f;--ac:#005fb8;--onac:#ffffff;
+--ok:#0f7b0f;--ruim:#c42b1c;--warn:#9d5d00;--hover:rgba(0,0,0,.05);--sel:rgba(0,0,0,.07);--sombra:0 2px 8px rgba(0,0,0,.08);
+--p-dados-bg:#ece6ff;--p-dados-tx:#4b2ca3;--p-live-bg:#dff3fb;--p-live-tx:#005a80;--p-ruim-bg:#fde7e9;--p-ruim-tx:#a4262c;--p-ok-bg:#dff6dd;--p-ok-tx:#0e700e;--perigo-bg:#fde7e9;--perigo-tx:#a4262c}}
+*{box-sizing:border-box}html{color-scheme:dark light}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif;display:flex;min-height:100vh}
 a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
-nav{background:var(--card);border-bottom:1px solid var(--card2);position:sticky;top:0;z-index:5}
-nav .in{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-nav b{margin-right:14px;padding:12px 0}nav a{padding:12px 12px;color:var(--mut);border-bottom:3px solid transparent}
-nav a.on{color:var(--tx);border-color:var(--ac)}nav a:hover{text-decoration:none;color:var(--tx)}
-.wrap{max-width:1100px;margin:0 auto;padding:22px 16px 60px}
-h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:30px 0 12px;border-left:4px solid var(--ac);padding-left:10px}
-h4{margin:0 0 6px;font-size:14px;color:var(--mut);font-weight:600}
-.sub,.nota{color:var(--mut)}.nota{font-size:13px}.vazio{color:var(--mut);padding:8px 0}
+.side{width:268px;flex:none;background:var(--side);padding:14px 10px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.marca{display:flex;align-items:center;gap:10px;padding:6px 10px 14px;font:600 15px "Segoe UI Variable Display","Segoe UI",sans-serif}
+.marca svg{width:26px;height:26px;flex:none}.marca small{display:block;font-weight:400;color:var(--mut);font-size:11px;line-height:1.1}
+.side a.item{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:6px;color:var(--tx);position:relative;white-space:nowrap}
+.side a.item svg{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.side a.item:hover{background:var(--hover);text-decoration:none}
+.side a.item.on{background:var(--sel);font-weight:600}.side a.item.on::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:3px;border-radius:3px;background:var(--ac)}
+.side a.item.on svg{stroke:var(--ac)}
+.side .esp{flex:1}.side .ver{color:var(--mut);font-size:11px;padding:8px 12px}
+.side .sep{height:1px;background:var(--stroke);margin:6px 8px}
+.menu{display:flex;align-items:center;justify-content:center;width:40px;height:36px;border-radius:6px;border:0;background:transparent;color:var(--tx);cursor:pointer;margin:0 0 6px 6px;padding:0}
+.menu:hover{background:var(--hover)}.menu svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+body.compacto .side{width:60px}body.compacto .side .txt,body.compacto .marca b,body.compacto .marca small,body.compacto .side .ver{display:none}
+body.compacto .side a.item{padding:0;justify-content:center}body.compacto .marca{justify-content:center;padding:6px 0 10px}
+@media (max-width:900px){.side{width:60px}.side .txt,.marca b,.marca small,.side .ver{display:none}.side a.item{padding:0;justify-content:center}.marca{justify-content:center}}
+main{flex:1;min-width:0;padding:10px 12px 0 0}
+.wrap{background:var(--bg);max-width:1180px;margin:0 auto;padding:14px 28px 60px}
+h1{font:600 28px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:6px 0 4px}
+h2{font:600 17px/1.3 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:28px 0 10px}
+h4{margin:0 0 6px;font-size:13px;color:var(--mut);font-weight:600}
+.sub,.nota{color:var(--mut)}.nota{font-size:12.5px}.vazio{color:var(--mut);padding:8px 0}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
-.card{background:var(--card);border-radius:10px;padding:12px 14px}.card b{display:block;font-size:24px}.card span{color:var(--mut);font-size:12px}
+.card,.graf,table,.dica,.ok,.aviso,details,pre{border:1px solid var(--stroke);box-shadow:var(--sombra)}
+.card{background:var(--card);border-radius:8px;padding:12px 14px}.card b{display:block;font:600 26px "Segoe UI Variable Display","Segoe UI",sans-serif}.card span{color:var(--mut);font-size:12px}
 .up{color:var(--ok)}.down{color:var(--ruim)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
-.graf{background:var(--card);border-radius:10px;padding:10px 12px}.graf svg{width:100%;height:auto}
-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;margin:8px 0}
-th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--card2);vertical-align:top}
-th{color:var(--mut);font-weight:600;font-size:13px}tr:last-child td{border-bottom:0}
-.bar{background:var(--card2);border-radius:4px;height:10px;min-width:60px}.bar i{display:block;height:10px;border-radius:4px;background:var(--ac)}
-.dica{background:var(--card);border-radius:10px;padding:12px 16px;margin:10px 0;border-left:4px solid var(--warn)}
-.dica.p1{border-color:var(--ruim)}.dica.p3{border-color:var(--ac)}.dica h3{margin:0 0 6px;font-size:16px}.dica p{margin:4px 0}
-.ok{background:var(--card);border-left:4px solid var(--ok);border-radius:10px;padding:8px 14px;margin:8px 0}
-.aviso{background:var(--card);border-left:4px solid var(--warn);border-radius:10px;padding:10px 14px;margin:10px 0}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tabs a{background:var(--card);padding:5px 12px;border-radius:999px;color:var(--mut)}
-.tabs a.on{background:var(--ac);color:#06202d;font-weight:600}.tabs a:hover{text-decoration:none}
-form.inline{display:inline}input[type=text],input[type=number],select{background:var(--card);color:var(--tx);border:1px solid var(--card2);border-radius:6px;padding:7px 10px;font:inherit;width:100%}
-button,.btn{background:var(--ac);color:#06202d;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;display:inline-block}
-button.sec,.btn.sec{background:var(--card2);color:var(--tx)}button.perigo{background:#5a2b32;color:#ffd5d9}
-label{display:block;margin:12px 0 4px;color:var(--mut);font-size:13px}.campo small{color:var(--mut)}
-code,.cmd{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
-pre{background:var(--card);border-radius:10px;padding:12px;overflow:auto;font-size:13px;max-height:340px}
-iframe{width:100%;height:760px;border:1px solid var(--card2);border-radius:10px;background:var(--bg)}
+.graf{background:var(--card);border-radius:8px;padding:10px 12px}.graf svg{width:100%;height:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border-radius:8px;overflow:hidden;margin:8px 0}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--stroke);vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:12.5px;background:var(--card2)}tr:last-child td{border-bottom:0}tbody tr:hover td,table tr:hover td{background:var(--hover)}
+.bar{background:var(--card2);border-radius:4px;height:8px;min-width:60px}.bar i{display:block;height:8px;border-radius:4px;background:var(--ac)}
+.dica{background:var(--card);border-radius:8px;padding:12px 16px;margin:10px 0;border-left:4px solid var(--warn)}
+.dica.p1{border-left-color:var(--ruim)}.dica.p3{border-left-color:var(--ac)}.dica h3{margin:0 0 6px;font-size:15px}.dica p{margin:4px 0}
+.ok{background:var(--card);border-left:4px solid var(--ok);border-radius:8px;padding:8px 14px;margin:8px 0}
+.aviso{background:var(--card);border-left:4px solid var(--warn);border-radius:8px;padding:10px 14px;margin:10px 0}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 14px;border-bottom:1px solid var(--stroke)}
+.tabs a{padding:7px 14px;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0}
+.tabs a.on{color:var(--tx);font-weight:600;border-bottom-color:var(--ac)}.tabs a:hover{text-decoration:none;background:var(--hover)}
+form.inline{display:inline}
+input[type=text],input[type=number],select{background:var(--card);color:var(--tx);border:1px solid var(--stroke);border-bottom:2px solid var(--stroke);border-radius:4px;padding:7px 10px;font:inherit;width:100%}
+input[type=text]:focus,input[type=number]:focus,select:focus{outline:0;border-bottom-color:var(--ac)}
+button,.btn{background:var(--ac);color:var(--onac);border:1px solid transparent;border-radius:4px;padding:6px 16px;min-height:32px;font:inherit;font-weight:600;cursor:pointer;display:inline-block}
+button:hover,.btn:hover{filter:brightness(1.08);text-decoration:none}button:active,.btn:active{filter:brightness(.92)}
+button.sec,.btn.sec{background:var(--card);color:var(--tx);border-color:var(--stroke);font-weight:400}
+button.sec:hover,.btn.sec:hover{background:var(--card2)}button.perigo{background:var(--perigo-bg);color:var(--perigo-tx)}
+label{display:block;margin:12px 0 4px;color:var(--mut);font-size:12.5px}.campo small{color:var(--mut)}
+code,.cmd{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;font-size:12.5px}
+pre{background:var(--card);border-radius:8px;padding:12px;overflow:auto;font-size:12.5px;max-height:340px}
+iframe{width:100%;height:760px;border:1px solid var(--stroke);border-radius:8px;background:#fff}
 .pill{display:inline-block;background:var(--card2);color:var(--mut);border-radius:999px;padding:1px 9px;font-size:12px}
 .icarma{color:var(--ac);vertical-align:middle;margin-right:8px;width:auto}.icimg{height:30px;vertical-align:middle;margin-right:8px}
-.expl{color:var(--mut);font-size:13px;margin:2px 0 0}.pill.dados{background:#2a2447;color:#c9b8ff}.pill.live{background:#12343f;color:#8fdcf0}
-details{background:var(--card);border-radius:10px;padding:8px 14px;margin:10px 0}summary{cursor:pointer;font-weight:600}
-.pill.ruim{background:#4a2329;color:#ffb3ba}.pill.ok{background:#1e3b2d;color:#9be6bd}
+.icmask{display:inline-block;vertical-align:middle;margin-right:8px;background:var(--ac);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.expl{color:var(--mut);font-size:12.5px;margin:2px 0 0}.pill.dados{background:var(--p-dados-bg);color:var(--p-dados-tx)}.pill.live{background:var(--p-live-bg);color:var(--p-live-tx)}
+details{background:var(--card);border-radius:8px;padding:8px 14px;margin:10px 0}summary{cursor:pointer;font-weight:600}
+.pill.ruim{background:var(--p-ruim-bg);color:var(--p-ruim-tx)}.pill.ok{background:var(--p-ok-bg);color:var(--p-ok-tx)}
+::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--card2);border-radius:8px;border:3px solid var(--bg)}
 """
 
-NAV = [("/", "Visão geral"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/configuracoes", "Configurações"),
-       ("/evolucao", "Evolução"), ("/treino", "Treino"),
-       ("/analisar", "Analisar demos"), ("/ao-vivo", "Ao vivo"), ("/ajustes", "Ajustes")]
+_I = lambda d: f'<svg viewBox="0 0 24 24" aria-hidden="true">{d}</svg>'
+# icones de linha (estilo Fluent): inicio, lista, mira, grafico, alvo, ao vivo, engrenagem, pasta, sliders
+ICONES = {
+    "/": _I('<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h4v-5h4v5h4v-9"/>'),
+    "/partidas": _I('<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/>'),
+    "/armas": _I('<circle cx="12" cy="12" r="7"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="1" />'),
+    "/evolucao": _I('<path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 4-5 3 3 5-7"/>'),
+    "/treino": _I('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>'),
+    "/ao-vivo": _I('<circle cx="12" cy="12" r="2.4"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.7 4.7a10.4 10.4 0 0 0 0 14.6M19.3 4.7a10.4 10.4 0 0 1 0 14.6"/>'),
+    "/configuracoes": _I('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'),
+    "/analisar": _I('<path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17z"/>'),
+    "/ajustes": _I('<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>'),
+}
+LOGO = ('<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#16212e"/>'
+        '<circle cx="32" cy="32" r="17" fill="none" stroke="#4cc2ff" stroke-width="4"/>'
+        '<path d="M32 7v14M32 43v14M7 32h14M43 32h14" stroke="#4cc2ff" stroke-width="4" stroke-linecap="round"/>'
+        '<circle cx="32" cy="32" r="2.6" fill="#fff"/></svg>')
+
+NAV = [("/", "Início"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/evolucao", "Evolução"), ("/treino", "Treino"),
+       ("/ao-vivo", "Ao vivo"), ("/configuracoes", "Config. do jogo"), ("/analisar", "Analisar demos")]
+NAV_RODAPE = [("/ajustes", "Ajustes")]
+
+
+JS = """
+try{if(localStorage.getItem('menu')==='c')document.documentElement.classList.add('c')}catch(e){}
+function alterna(){var c=document.body.classList.toggle('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}}
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a){e.preventDefault();fetch('/abrir?u='+encodeURIComponent(a.href))}});
+document.addEventListener('DOMContentLoaded',function(){try{if(localStorage.getItem('menu')==='c')document.body.classList.add('compacto')}catch(e){}});
+"""
 
 
 def pagina(titulo, corpo, ativo="/", refresh=None):
     if not refresh and E.dl and E.dl.get("estado") == "baixando":
         refresh = 2
     meta = f'<meta http-equiv="refresh" content="{refresh}">' if refresh else ""
-    links = "".join(f'<a href="{h}" class="{"on" if h == ativo else ""}">{esc(n)}</a>' for h, n in NAV)
+    def item(h, n):
+        cls = "item on" if (h == ativo or (h != "/" and ativo.startswith(h))) else "item"
+        return f'<a href="{h}" class="{cls}" title="{esc(n)}">{ICONES.get(h, "")}<span class="txt">{esc(n)}</span></a>'
+    links = "".join(item(h, n) for h, n in NAV)
+    rodape = "".join(item(h, n) for h, n in NAV_RODAPE)
     msg = ""
     if E.update:
         u = E.update
@@ -203,8 +263,12 @@ def pagina(titulo, corpo, ativo="/", refresh=None):
             E.mensagem = None
     return (f'<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">{meta}'
             f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(titulo)} · CS2 Coach</title>'
-            f'<style>{CSS}</style></head><body><nav><div class="in"><b>CS2 Coach · Hub</b>{links}</div></nav>'
-            f'<div class="wrap">{msg}{corpo}</div></body></html>')
+            f'<style>{CSS}</style><script>{JS}</script></head><body>'
+            f'<aside class="side"><button class="menu" onclick="alterna()" title="Recolher/expandir menu" aria-label="Menu">'
+            f'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>'
+            f'<div class="marca">{LOGO}<div><b>CS2 Coach</b><small>Hub</small></div></div>{links}<div class="esp"></div>'
+            f'<div class="sep"></div>{rodape}<div class="ver">Versão {esc(VERSAO)}</div></aside>'
+            f'<main><div class="wrap">{msg}{corpo}</div></main></body></html>')
 
 
 def form_post(acao, campos="", botao="Enviar", classe="", confirmar=None):
@@ -236,10 +300,22 @@ def ajustes_config():
 # --------------------------------------------------------------------------
 # Tabelas reutilizaveis
 # --------------------------------------------------------------------------
+# armas parecidas que reaproveitam o desenho de outra
+ICONE_ALIAS = {"m4a1_silencer": "m4a1", "incgrenade": "inferno", "molotov": "inferno", "mp7": "mp5sd", "mp9": "mac10",
+               "scar20": "awp", "g3sg1": "awp", "p250": "hkp2000", "fiveseven": "hkp2000", "cz75a": "glock",
+               "elite": "glock", "revolver": "deagle", "galilar": "ak47", "sg556": "m4a1", "famas": "m4a1", "aug": "m4a1"}
+
+
 def icone_arma(arma, altura=26):
     a = armas_mod.norm_arma(arma)
     if icones.nome_png_valido(a) and (armazem.PASTA_DADOS / "armas_img" / f"{a}.png").exists():
-        return f'<img class="icimg" src="/img/arma/{a}.png" alt="{esc(a)}">'
+        return f'<img class="icimg" src="/img/arma/{a}.png" alt="{esc(a)}">'      # imagem que o usuario colocou
+    inc = icones.arquivo_incluido(ICONE_ALIAS.get(a, a))
+    if inc:
+        larg, alt = icones.tamanho_png(inc)
+        nome = inc.stem
+        return (f'<span class="icmask" role="img" aria-label="{esc(a)}" style="height:{altura}px;aspect-ratio:{larg}/{alt};'
+                f'--m:url(/img/arma/{nome}.png)"></span>')
     return icones.svg_arma(a, altura)
 
 
@@ -1912,6 +1988,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._enviar(pg_inicio())
             if seg[0] == "ping":
                 return self._enviar("cs2coach-hub", tipo="text/plain; charset=utf-8")
+            if seg[0] == "mostrar":
+                if E.mostrar_janela:
+                    E.mostrar_janela()
+                else:
+                    webbrowser.open(f"http://127.0.0.1:{E.porta}")
+                return self._enviar("ok", tipo="text/plain; charset=utf-8")
+            if seg[0] == "abrir":
+                alvo = (q.get("u") or [""])[0]
+                if alvo.startswith(("https://github.com/", f"http://127.0.0.1:{E.porta_gsi}/")):
+                    webbrowser.open(alvo)
+                return self._enviar("ok", tipo="text/plain; charset=utf-8")
             if seg[0] == "bem-vindo":
                 return self._enviar(pg_bem_vindo())
             rota = seg[0]
@@ -1952,6 +2039,8 @@ class Handler(BaseHTTPRequestHandler):
             if rota == "img" and len(seg) == 3 and seg[1] == "arma" and seg[2].endswith(".png"):
                 nome = seg[2][:-4]
                 arq = armazem.PASTA_DADOS / "armas_img" / f"{nome}.png"
+                if not arq.is_file():
+                    arq = icones.arquivo_incluido(nome) or arq
                 if icones.nome_png_valido(nome) and arq.is_file():
                     return self._enviar(arq.read_bytes(), tipo="image/png")
                 return self._enviar("Imagem não encontrada.", 404, "text/plain; charset=utf-8")
@@ -2201,13 +2290,13 @@ def _console_windows(mostrar: bool):
             ctypes.windll.user32.ShowWindow(hwnd, 5 if mostrar else 0)
 
 
-def iniciar_bandeja(url, parar):
-    """Icone perto do relogio do Windows: abrir o Hub, abrir a pasta dos dados, sair. Devolve False se nao der."""
+def iniciar_bandeja(url, janela=None):
+    """Icone perto do relogio do Windows (abrir, pasta dos dados, sair), em segundo plano. Devolve o icone ou None."""
     try:
         import pystray
         from PIL import Image, ImageDraw
     except Exception:
-        return False
+        return None
     try:
         from icone_app import desenhar
         img = desenhar(64)
@@ -2216,7 +2305,12 @@ def iniciar_bandeja(url, parar):
         ImageDraw.Draw(img).ellipse((14, 14, 50, 50), outline=(76, 194, 255, 255), width=4)
 
     def abrir(icon, item):
-        webbrowser.open(url)
+        if janela is not None:
+            janela.mostrar()
+        elif E.mostrar_janela:
+            E.mostrar_janela()
+        else:
+            webbrowser.open(url)
 
     def pasta(icon, item):
         with contextlib.suppress(Exception):
@@ -2224,19 +2318,20 @@ def iniciar_bandeja(url, parar):
                 os.startfile(str(armazem.PASTA_DADOS))   # noqa: S606
 
     def sair(icon, item):
+        E.parar.set()
         icon.stop()
+        if janela is not None:
+            janela.sair()
 
     icone = pystray.Icon("cs2coach", img, "CS2 Coach", menu=pystray.Menu(
         pystray.MenuItem("Abrir o CS2 Coach", abrir, default=True),
         pystray.MenuItem("Abrir a pasta dos dados", pasta),
         pystray.MenuItem("Sair", sair)))
-    _console_windows(False)
     try:
-        icone.run()
+        icone.run_detached()
     except Exception:
-        _console_windows(True)
-        return False
-    return True
+        return None
+    return icone
 
 
 def ja_esta_aberto(porta) -> bool:
@@ -2262,17 +2357,21 @@ def main():
     ap.add_argument("--porta-gsi", type=int, default=3000, help="porta do painel ao vivo (padrão 3000)")
     ap.add_argument("--token", default="cs2coach", help="token do arquivo de integração do jogo")
     ap.add_argument("--sem-ao-vivo", action="store_true", help="não liga o painel ao vivo dentro do Hub")
-    ap.add_argument("--sem-navegador", action="store_true", help="não abre o navegador sozinho")
+    ap.add_argument("--sem-navegador", action="store_true", help="não abre janela nem navegador (só o servidor)")
+    ap.add_argument("--sem-janela", action="store_true", help="usa o navegador em vez da janela própria")
     ap.add_argument("--sem-bandeja", action="store_true", help="não cria o ícone perto do relógio")
+    ap.add_argument("--teste-janela", action="store_true", help="(teste automático) abre a janela, confere a página e sai")
     args = ap.parse_args()
     E.porta, E.porta_gsi, E.gsi_token = args.porta, args.porta_gsi, args.token
     url = f"http://127.0.0.1:{args.porta}"
 
     # ja tem um CS2 Coach aberto? So abre o navegador nele (evita duas copias brigando pela porta)
     if ja_esta_aberto(args.porta):
-        print("O CS2 Coach já está aberto: abrindo o navegador nele.")
+        print("O CS2 Coach já está aberto: trazendo a janela dele para frente.")
         if not args.sem_navegador:
-            webbrowser.open(url)
+            import urllib.request
+            with contextlib.suppress(Exception):
+                urllib.request.urlopen(url + "/mostrar", timeout=3).read()
         return
 
     # quem ja tinha dados ou ajustes de uma versao anterior nao precisa do assistente de primeira vez
@@ -2294,17 +2393,44 @@ def main():
         sys.exit(1)
     print(f"CS2 Coach rodando em {url}")
     print(f"Dados guardados em: {armazem.PASTA_DADOS}")
-    print("Deixe esta janela aberta enquanto usa. Para encerrar: Ctrl+C (ou 'Sair' no ícone perto do relógio).")
+    print("Para encerrar: Ctrl+C (ou 'Sair' no ícone perto do relógio).")
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
-    if not args.sem_navegador:
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    janela = None
+    icone = None
     try:
-        if args.sem_bandeja or not iniciar_bandeja(url, servidor.shutdown):
-            while True:
-                time.sleep(3600)
+        if not args.sem_navegador and not args.sem_janela and (os.name == "nt" or args.teste_janela):
+            candidata = janela_mod.Janela(url, armazem.PASTA_DADOS)
+            if candidata.disponivel():
+                janela = candidata
+        if not args.sem_bandeja:
+            icone = iniciar_bandeja(url, janela)
+            if icone is not None:
+                _console_windows(False)
+        if janela is not None:
+            E.mostrar_janela = janela.mostrar
+            janela.saindo = icone is None      # sem icone na bandeja nao ha como reabrir: fechar encerra
+            janela.criar()
+            try:
+                janela.iniciar(_teste_janela(janela) if args.teste_janela else None)
+            except Exception as exc:
+                print("Não consegui abrir a janela própria:", exc)
+                E.mostrar_janela = None
+                janela = None
+                if not (janela_mod.abrir_modo_app(url)):
+                    webbrowser.open(url)
+        elif not args.sem_navegador:
+            if not janela_mod.abrir_modo_app(url):
+                threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+        if janela is None:
+            # modo navegador (ou janela indisponivel): espera 'Sair' no icone ou Ctrl+C
+            while not E.parar.wait(3600):
+                pass
     except KeyboardInterrupt:
         print("\nEncerrando...")
     finally:
+        if icone is not None:
+            with contextlib.suppress(Exception):
+                icone.stop()
         if E.coach is not None:
             with contextlib.suppress(Exception):
                 with E.coach.lock:
@@ -2312,6 +2438,26 @@ def main():
                     E.coach._encerrar_partida()
         servidor.shutdown()
         servidor.server_close()
+
+
+def _teste_janela(janela):
+    """Teste automatico (CI): confere que a janela carregou o Hub e grava o resultado num arquivo."""
+    def rodar():
+        resultado = "FALHOU: tempo esgotado"
+        for _ in range(60):
+            time.sleep(1)
+            try:
+                titulo = janela.janela.evaluate_js("document.title")
+                if titulo and "CS2 Coach" in str(titulo):
+                    resultado = f"OK: janela abriu o Hub ({titulo})"
+                    break
+            except Exception as exc:
+                resultado = f"FALHOU: {exc}"
+        with contextlib.suppress(Exception):
+            (armazem.PASTA_DADOS / "janela_teste.txt").write_text(resultado, encoding="utf-8")
+        janela.sair()
+        E.parar.set()
+    return rodar
 
 
 if __name__ == "__main__":

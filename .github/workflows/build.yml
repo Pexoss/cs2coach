@@ -55,6 +55,16 @@ jobs:
           Write-Host "ping =" $r.Content
           Stop-Process -Id $p.Id -Force
           if ($r.Content -ne "cs2coach-hub") { exit 1 }
+      - name: Testar a janela própria (sem navegador)
+        continue-on-error: true      # informativo: se o WebView2 faltar no runner, o app ainda cai para o modo navegador
+        shell: pwsh
+        run: |
+          $env:CS2COACH_DADOS = "$PWD\teste_janela"
+          $p = Start-Process -FilePath "dist\CS2Coach\CS2Coach.exe" -ArgumentList "--teste-janela","--sem-bandeja","--porta","3198","--porta-gsi","3098" -PassThru
+          $p.WaitForExit(90000) | Out-Null
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          $f = "teste_janela\janela_teste.txt"
+          if (Test-Path $f) { Get-Content $f; if ((Get-Content $f) -notlike "OK*") { exit 1 } } else { Write-Host "sem resultado"; if (Test-Path "teste_janela\hub.log") { Get-Content "teste_janela\hub.log" }; exit 1 }
       - name: Instalar Inno Setup
         run: choco install innosetup -y --no-progress
       - name: Gerar o instalador

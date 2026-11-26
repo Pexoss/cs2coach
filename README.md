@@ -10,7 +10,7 @@ então **não há risco de VAC**.
 **Opção A: instalador (recomendado, não precisa de Python)**
 0. Baixe o instalador em https://github.com/Pexoss/cs2coach/releases/latest/download/CS2Coach-Setup.exe
 1. Rode `CS2Coach-Setup.exe` e clique em Avançar.
-2. Abra o **CS2 Coach** pelo menu Iniciar. O navegador abre sozinho no assistente de primeira vez (1 minuto).
+2. Abra o **CS2 Coach** pelo menu Iniciar. O programa abre na **própria janela** (sem navegador) no assistente de primeira vez (1 minuto).
 3. Pronto. Baixe as demos no CS2 (Seu perfil > Partidas > Baixar) e o programa analisa sozinho.
 
 O Windows pode avisar "O Windows protegeu seu PC" porque o instalador não tem assinatura digital paga.
@@ -36,7 +36,8 @@ Dê dois cliques em `Iniciar CS2 Coach.bat`. Na primeira vez ele prepara tudo so
 - **Ajustes**: conta, DPI, Hz, pastas, modos que contam.
 
 O programa fica com um ícone perto do relógio do Windows (Abrir, Pasta dos dados, Sair). Se ele já estiver aberto,
-abrir de novo só leva você ao navegador.
+abrir de novo só traz a janela para a frente. Fechar a janela (X) mantém o programa rodando perto do relógio; use "Sair" no ícone para encerrar.
+A janela usa o WebView2 do Windows (já vem no Windows 11); se faltar, o programa abre no modo aplicativo do Edge/Chrome.
 
 ## Seus dados
 Ficam em `%APPDATA%\CS2Coach` (cole isso na barra do Explorador). Atualizar ou reinstalar **não apaga** o histórico.
