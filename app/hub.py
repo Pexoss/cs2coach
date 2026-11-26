@@ -63,6 +63,7 @@ class Estado:
         self.mensagem = None                       # aviso de uma acao (mostrado uma vez)
         self.update = None                         # {'versao','url','download','notas'} se houver versao nova
         self.update_erro = None
+        self.dl = None                             # download da versao nova: {'estado','bytes','total','arquivo','erro'}
         self.auto = {"vistos": {}, "ultima": None}   # importacao automatica de demos
 
 
@@ -182,6 +183,8 @@ NAV = [("/", "Visão geral"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("
 
 
 def pagina(titulo, corpo, ativo="/", refresh=None):
+    if not refresh and E.dl and E.dl.get("estado") == "baixando":
+        refresh = 2
     meta = f'<meta http-equiv="refresh" content="{refresh}">' if refresh else ""
     links = "".join(f'<a href="{h}" class="{"on" if h == ativo else ""}">{esc(n)}</a>' for h, n in NAV)
     msg = ""
@@ -189,9 +192,9 @@ def pagina(titulo, corpo, ativo="/", refresh=None):
         u = E.update
         notas = f"<div class='expl'>{esc(u['notas'])}</div>" if u.get("notas") else ""
         msg += (f"<div class='aviso'>🔔 <b>Nova versão {esc(u['versao'])} disponível</b> (você está na {esc(VERSAO)}). "
-                f"<a href='{esc(u['download'])}' target='_blank' rel='noopener'>Baixar o instalador</a> · "
+                f"{_bloco_baixar()} "
                 f"<a href='{esc(u['url'])}' target='_blank' rel='noopener'>ver novidades</a>{notas}"
-                "<div class='expl'>Feche o CS2 Coach, rode o instalador novo e abra de novo: seus dados são mantidos.</div></div>")
+                "<div class='expl'>A atualização fecha o CS2 Coach, instala a versão nova e abre de novo. Seus dados são mantidos.</div></div>")
     with E.lock:
         if E.mensagem:
             msg = f'<div class="aviso">{E.mensagem}</div>'
@@ -897,6 +900,98 @@ def verificar_atualizacao(base=None):
     return E.update
 
 
+def _bloco_baixar():
+    """Botoes do aviso de versao nova: baixar dentro do proprio app e instalar."""
+    u = E.update or {}
+    dl = E.dl or {}
+    estado = dl.get("estado")
+    if estado == "baixando":
+        total = dl.get("total") or 0
+        pct = f"{int(dl['bytes'] * 100 / total)}%" if total else f"{dl['bytes'] // 1_000_000} MB"
+        return f"<b>Baixando a atualização... {pct}</b>"
+    if estado == "pronto":
+        return (form_post("instalar-atualizacao", "", "Instalar agora (reinicia o CS2 Coach)", "")
+                + " <span class='sub'>já baixada</span>")
+    erro = (f"<div class='expl'>Não consegui baixar: {esc(dl.get('erro', ''))}. Você ainda pode "
+            f"<a href='{esc(u.get('download', ''))}' target='_blank' rel='noopener'>baixar pelo navegador</a>.</div>"
+            if estado == "erro" else "")
+    return form_post("baixar-atualizacao", "", "Baixar e instalar agora", "") + erro
+
+
+def baixar_atualizacao():
+    """Baixa o instalador da versao nova (so de github.com) para a pasta temporaria. Roda em segundo plano."""
+    import tempfile
+    import urllib.request
+    u = E.update
+    if not u:
+        return False
+    url = str(u.get("download") or "")
+    if not (url.startswith("https://github.com/") or url.startswith("http://127.0.0.1")):
+        return False
+    with E.lock:
+        if E.dl and E.dl.get("estado") == "baixando":
+            return True
+        pasta = Path(tempfile.gettempdir()) / "CS2Coach-atualizacao"
+        E.dl = {"estado": "baixando", "bytes": 0, "total": 0, "arquivo": str(pasta / "CS2Coach-Setup.exe"), "erro": ""}
+
+    def rodar():
+        try:
+            pasta.mkdir(parents=True, exist_ok=True)
+            destino = Path(E.dl["arquivo"])
+            parcial = destino.with_suffix(".baixando")
+            req = urllib.request.Request(url, headers={"User-Agent": f"CS2Coach/{VERSAO}"})
+            with urllib.request.urlopen(req, timeout=30) as r, open(parcial, "wb") as f:
+                E.dl["total"] = int(r.headers.get("Content-Length") or 0)
+                while True:
+                    bloco = r.read(256 * 1024)
+                    if not bloco:
+                        break
+                    f.write(bloco)
+                    E.dl["bytes"] += len(bloco)
+            if E.dl["total"] and E.dl["bytes"] != E.dl["total"]:
+                raise OSError("download incompleto")
+            with open(parcial, "rb") as f:
+                if f.read(2) != b"MZ" or E.dl["bytes"] < 500_000:
+                    raise OSError("o arquivo baixado não parece um instalador")
+            os.replace(parcial, destino)
+            E.dl["estado"] = "pronto"
+        except Exception as exc:
+            E.dl["estado"] = "erro"
+            E.dl["erro"] = str(exc)[:120]
+
+    threading.Thread(target=rodar, daemon=True).start()
+    return True
+
+
+def _lancar_instalador(caminho):
+    """Abre o instalador sozinho (sem janela de perguntas) e devolve True se conseguiu."""
+    if os.name != "nt":
+        return False
+    import subprocess
+    flags = 0x00000008 | 0x00000200            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([str(caminho), "/SILENT", "/CLOSEAPPLICATIONS"], creationflags=flags, close_fds=True)
+    return True
+
+
+def instalar_atualizacao():
+    dl = E.dl or {}
+    arq = Path(dl.get("arquivo") or "")
+    if dl.get("estado") != "pronto" or not arq.is_file():
+        return "Baixe a atualização primeiro."
+    if not _lancar_instalador(arq):
+        return "A instalação automática só funciona no Windows. Abra o arquivo baixado: " + esc(str(arq))
+
+    def sair():
+        if E.coach is not None:
+            with contextlib.suppress(Exception):
+                with E.coach.lock:
+                    E.coach._fechar_rajada()
+                    E.coach._encerrar_partida()
+        os._exit(0)
+    threading.Timer(1.5, sair).start()
+    return ""
+
+
 def vigia_atualizacao():
     time.sleep(20)
     while True:
@@ -1390,6 +1485,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(dados)
 
+    def _responder_instalando(self):
+        corpo = ("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Atualizando</title>"
+                 f"<style>{CSS}</style></head><body><div class='wrap'><h1>Atualizando o CS2 Coach...</h1>"
+                 "<p>O instalador está rodando. Esta janela fecha sozinha e o CS2 Coach abre de novo em instantes "
+                 "(se não abrir, procure “CS2 Coach” no menu Iniciar). Seus dados foram mantidos.</p></div></body></html>")
+        self._enviar(corpo, 200, "text/html; charset=utf-8")
+
     def _redirecionar(self, destino):
         self.send_response(303)
         self.send_header("Location", destino)
@@ -1583,6 +1685,18 @@ class Handler(BaseHTTPRequestHandler):
             with E.lock:
                 E.mensagem = "Tudo pronto! " + " · ".join(feitos) + "."
             return self._redirecionar("/")
+        if acao == "baixar-atualizacao":
+            if not baixar_atualizacao():
+                with E.lock:
+                    E.mensagem = "Não há atualização para baixar agora."
+            return self._redirecionar("/")
+        if acao == "instalar-atualizacao":
+            erro = instalar_atualizacao()
+            if erro:
+                with E.lock:
+                    E.mensagem = erro
+                return self._redirecionar("/")
+            return self._responder_instalando()
         if acao == "checar-atualizacao":
             u = verificar_atualizacao()
             with E.lock:

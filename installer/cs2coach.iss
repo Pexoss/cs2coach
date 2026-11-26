@@ -19,6 +19,8 @@ WizardStyle=modern
 SetupIconFile=..\icone.ico
 UninstallDisplayIcon={app}\CS2Coach.exe
 DisableProgramGroupPage=yes
+CloseApplications=yes
+RestartApplications=no
 ShowLanguageDialog=no
 LanguageDetectionMethod=none
 
@@ -36,7 +38,7 @@ Name: "{autoprograms}\{#Nome}"; Filename: "{app}\CS2Coach.exe"
 Name: "{autodesktop}\{#Nome}"; Filename: "{app}\CS2Coach.exe"; Tasks: desktop
 
 [Run]
-Filename: "{app}\CS2Coach.exe"; Description: "Abrir o CS2 Coach agora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\CS2Coach.exe"; Description: "Abrir o CS2 Coach agora"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; Os seus dados (%APPDATA%\CS2Coach) NAO sao apagados ao desinstalar.
