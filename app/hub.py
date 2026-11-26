@@ -301,9 +301,7 @@ def ajustes_config():
 # Tabelas reutilizaveis
 # --------------------------------------------------------------------------
 # armas parecidas que reaproveitam o desenho de outra
-ICONE_ALIAS = {"m4a1_silencer": "m4a1", "incgrenade": "inferno", "molotov": "inferno", "mp7": "mp5sd", "mp9": "mac10",
-               "scar20": "awp", "g3sg1": "awp", "p250": "hkp2000", "fiveseven": "hkp2000", "cz75a": "glock",
-               "elite": "glock", "revolver": "deagle", "galilar": "ak47", "sg556": "m4a1", "famas": "m4a1", "aug": "m4a1"}
+ICONE_ALIAS = {"incgrenade": "inferno", "molotov": "inferno", "usp": "usp_silencer", "p2000": "hkp2000"}
 
 
 def icone_arma(arma, altura=26):
