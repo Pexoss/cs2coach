@@ -30,7 +30,7 @@ import threading
 import time
 import traceback
 import webbrowser
-from datetime import datetime
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
@@ -40,6 +40,7 @@ import armas as armas_mod  # noqa: E402
 import armazem  # noqa: E402
 import config_cs  # noqa: E402
 import icones  # noqa: E402
+import metricas as metricas_mod  # noqa: E402
 from versao import REPO, VERSAO  # noqa: E402
 
 BASE = Path(__file__).resolve().parent
@@ -179,6 +180,7 @@ details{background:var(--card);border-radius:10px;padding:8px 14px;margin:10px 0
 """
 
 NAV = [("/", "Visão geral"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/configuracoes", "Configurações"),
+       ("/evolucao", "Evolução"), ("/treino", "Treino"),
        ("/analisar", "Analisar demos"), ("/ao-vivo", "Ao vivo"), ("/ajustes", "Ajustes")]
 
 
@@ -396,7 +398,7 @@ def pg_inicio():
                " · <a href='/configuracoes'>ver detalhes →</a></p>")
 
     ultimas = "<h2>Últimas partidas</h2>" + tabela_partidas(armazem.listar_partidas(sid, limite=5), acoes=False)
-    return pagina("Visão geral", "<h1>Visão geral</h1><div class='sub'>Tudo guardado no seu computador.</div>" + banner_auto()
+    return pagina("Visão geral", "<h1>Visão geral</h1><div class='sub'>Tudo guardado no seu computador.</div>" + banner_auto() + card_treino_hoje()
                   + cards + graficos + topo + recorrentes + cfg + ultimas, "/")
 
 
@@ -481,8 +483,9 @@ def pg_partida(pid):
     rk = armas_mod.ordenar(armas_mod.ranking(armazem.armas_da_partida(pid)), "dano")
     corpo = (f"<p><a href='/partidas'>← Partidas</a></p><h1>{esc(d['mapa'] or '')} · {data_br(d['data_demo'])}</h1>"
              f"<div class='sub'>{esc(d['demo'] or '')} · {g['rounds']} rounds · jogador {esc(d['jogador'] or '')}</div>"
-             f"<p><a class='btn' href='/partida/{pid}/relatorio'>Abrir relatório completo</a></p>"
-             + cards + "<h2>O que mais pesou</h2>" + (lista_dicas(d["dicas"][:6]) or "<div class='vazio'>Sem pontos fortes de alerta.</div>")
+             f"<p><a class='btn' href='/partida/{pid}/relatorio'>Abrir relatório completo</a> "
+             f"<a class='btn sec' href='/partida/{pid}/kills'>Ver cada kill e morte (onde e como)</a></p>"
+             + cards + bloco_scope(armazem.resultados(d.get("steamid")), pid) + "<h2>O que mais pesou</h2>" + (lista_dicas(d["dicas"][:6]) or "<div class='vazio'>Sem pontos fortes de alerta.</div>")
              + "".join(f"<div class='ok'>✔ {esc(f)}</div>" for f in d["fortes"])
              + "<h2>Dano por arma nesta partida</h2>" + tabela_armas(rk)
              + "<p class='nota'>A nota só existe para armas com 40+ tiros e compara as suas armas entre si; "
@@ -501,6 +504,404 @@ def pg_partida(pid):
                   f"(sessão de {data_br(sv['iniciado'])}). Os dados abaixo só existem no ao vivo e completam a demo; "
                   f"nada foi contado duas vezes. <a href='/sessao/{sv['id']}'>Abrir a sessão</a></div>" + bloco_sessao(sv, completo=False))
     return pagina(f"Partida {pid}", corpo, "/partidas"), 200
+
+
+# --------------------------------------------------------------------------
+# Metricas estilo Scope, kills (onde e como), evolucao e plano de treino
+# --------------------------------------------------------------------------
+def _pill(txt, cls=""):
+    return f"<span class='pill {cls}'>{esc(txt)}</span> "
+
+
+def _vel_txt(v):
+    if v is None:
+        return ""
+    return "parado" if v < 40 else "andando" if v < 110 else "correndo"
+
+
+def _nota_html(nota):
+    if nota is None:
+        return "<span class='sub'>—</span>"
+    cor = "#3ddc97" if nota >= 66 else "#ff6b6b" if nota <= 33 else "#ffb84c"
+    return f"<b>{nota}</b> {barra(nota, cor)}"
+
+
+def bloco_scope(todos, pid):
+    notas = metricas_mod.notas_partida(todos, pid)
+    if not notas or all(n["valor"] is None for n in notas):
+        return ""
+    linhas = ""
+    for n in notas:
+        if n["valor"] is None:
+            continue
+        casas = 2 if n["chave"] == "kd" else 0 if n["chave"] in ("ttk", "adr") else 1
+        media = f"{n['media']:.{casas}f}{n['sufixo']}" if n["media"] is not None else "—"
+        valor = f"{n['valor']:.{casas}f}{n['sufixo']}"
+        dica = "menor é melhor" if n["melhor"] == "baixo" else "maior é melhor"
+        linhas += (f"<tr><td>{esc(n['rotulo'])} <span class='sub'>({dica})</span></td><td><b>{esc(valor)}</b></td>"
+                   f"<td>{esc(media)}</td><td style='min-width:140px'>{_nota_html(n['nota'])}</td></tr>")
+    return ("<h2>Métricas além do placar</h2><table><tr><th>Métrica</th><th>Esta partida</th>"
+            "<th>Sua média nas outras</th><th>Nota (0–100)</th></tr>" + linhas + "</table>"
+            "<p class='nota'>A nota compara esta partida com o <b>seu próprio histórico</b> (quantas das suas outras partidas "
+            "ela supera, já levando em conta se mais alto ou mais baixo é melhor). Aparece depois de 5 partidas analisadas. "
+            "Não uso tabelas por rating porque não existem números oficiais para isso.</p>")
+
+
+def _tags_kill(k):
+    t = ""
+    if k.get("hs"):
+        t += _pill("Headshot", "ok")
+    if k.get("abertura"):
+        t += _pill("Abertura", "dados")
+    if k.get("parede"):
+        t += _pill("Parede")
+    if k.get("fumaca"):
+        t += _pill("Fumaça")
+    if k.get("sem_mira"):
+        t += _pill("Sem mira")
+    if k.get("cego"):
+        t += _pill("Você cego", "ruim")
+    vt = _vel_txt(k.get("vel_voce"))
+    if vt:
+        t += _pill(f"você {vt}", "ruim" if vt == "correndo" else "")
+    return t
+
+
+def _tags_morte(m):
+    t = ""
+    if m.get("hs"):
+        t += _pill("Headshot sofrido", "ruim")
+    if m.get("abertura"):
+        t += _pill("Abertura", "dados")
+    if m.get("tiros_antes") == 0:
+        t += _pill("Sem atirar", "ruim")
+    if m.get("fora_visao"):
+        t += _pill("Fora da visão", "ruim")
+    if m.get("cego"):
+        t += _pill("Cego", "ruim")
+    if m.get("parede"):
+        t += _pill("Parede")
+    if m.get("fumaca"):
+        t += _pill("Fumaça")
+    vt = _vel_txt(m.get("vel_voce"))
+    if vt:
+        t += _pill(f"você {vt}")
+    return t
+
+
+def mapa_kills_svg(kills, mortes, modo):
+    """Pontos e linhas por posicao no mapa (sem a imagem do radar): verde = suas kills, vermelho = suas mortes."""
+    todos = []
+    for k in kills:
+        todos += [(k.get("x"), k.get("y")), (k.get("vx"), k.get("vy"))]
+    for m in mortes:
+        todos += [(m.get("x"), m.get("y")), (m.get("ax"), m.get("ay"))]
+    todos = [(x, y) for x, y in todos if x is not None and y is not None]
+    if not todos:
+        return ""
+    w, h, mg = 640, 470, 26
+    minx, maxx = min(x for x, _ in todos), max(x for x, _ in todos)
+    miny, maxy = min(y for _, y in todos), max(y for _, y in todos)
+    sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
+
+    def X(x):
+        return mg + (x - minx) * sc
+
+    def Y(y):
+        return h - mg - (y - miny) * sc
+
+    p = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Mapa de kills e mortes" '
+         f'style="background:#0f141b;border-radius:10px;width:100%;height:auto">']
+    for fr in (0.25, 0.5, 0.75):
+        p.append(f'<line x1="{w * fr:.0f}" x2="{w * fr:.0f}" y1="0" y2="{h}" stroke="#1a2230"/>'
+                 f'<line y1="{h * fr:.0f}" y2="{h * fr:.0f}" x1="0" x2="{w}" stroke="#1a2230"/>')
+    if modo in ("mortes", "ambas"):
+        for m in mortes:
+            if None in (m.get("x"), m.get("y"), m.get("ax"), m.get("ay")):
+                continue
+            tip = (f"Round {m['rnd']} · morte para {_nome_arma(m['arma'])} · {m['dist']:.0f} m"
+                   + (" · headshot" if m.get("hs") else ""))
+            p.append(f'<g><title>{esc(tip)}</title>'
+                     f'<line x1="{X(m["ax"]):.1f}" y1="{Y(m["ay"]):.1f}" x2="{X(m["x"]):.1f}" y2="{Y(m["y"]):.1f}" '
+                     f'stroke="#ff6b6b" stroke-width="1.6" opacity=".75"/>'
+                     f'<circle cx="{X(m["ax"]):.1f}" cy="{Y(m["ay"]):.1f}" r="3.5" fill="none" stroke="#ff6b6b" stroke-width="1.6"/>'
+                     f'<rect x="{X(m["x"]) - 4:.1f}" y="{Y(m["y"]) - 4:.1f}" width="8" height="8" fill="#ff6b6b" '
+                     f'transform="rotate(45 {X(m["x"]):.1f} {Y(m["y"]):.1f})"/>'
+                     f'<text x="{X(m["x"]) + 7:.1f}" y="{Y(m["y"]) - 5:.1f}" fill="#ffb3ba" font-size="10">{m["rnd"]}</text></g>')
+    if modo in ("kills", "ambas"):
+        for k in kills:
+            if None in (k.get("x"), k.get("y"), k.get("vx"), k.get("vy")):
+                continue
+            tip = (f"Round {k['rnd']} · {_nome_arma(k['arma'])} · {k['dist'] or 0:.0f} m"
+                   + (" · headshot" if k.get("hs") else "") + (" · parede" if k.get("parede") else "")
+                   + (" · fumaça" if k.get("fumaca") else "") + (" · sem mira" if k.get("sem_mira") else ""))
+            vx, vy = X(k["vx"]), Y(k["vy"])
+            p.append(f'<g><title>{esc(tip)}</title>'
+                     f'<line x1="{X(k["x"]):.1f}" y1="{Y(k["y"]):.1f}" x2="{vx:.1f}" y2="{vy:.1f}" '
+                     f'stroke="#3ddc97" stroke-width="1.6" opacity=".8"/>'
+                     f'<circle cx="{X(k["x"]):.1f}" cy="{Y(k["y"]):.1f}" r="4" fill="#3ddc97"/>'
+                     f'<line x1="{vx - 4:.1f}" y1="{vy - 4:.1f}" x2="{vx + 4:.1f}" y2="{vy + 4:.1f}" stroke="#3ddc97" stroke-width="2"/>'
+                     f'<line x1="{vx - 4:.1f}" y1="{vy + 4:.1f}" x2="{vx + 4:.1f}" y2="{vy - 4:.1f}" stroke="#3ddc97" stroke-width="2"/>'
+                     f'<text x="{X(k["x"]) + 7:.1f}" y="{Y(k["y"]) - 5:.1f}" fill="#9be6bd" font-size="10">{k["rnd"]}</text></g>')
+    p.append("</svg>")
+    return "".join(p)
+
+
+def _nome_arma(a):
+    return armas_mod.nome_arma(armas_mod.norm_arma(a))
+
+
+def pg_kills(pid, q):
+    d = armazem.obter_partida(pid)
+    if not d:
+        return pagina("Kills", "<h1>Partida não encontrada</h1><a href='/partidas'>Voltar</a>", "/partidas"), 404
+    res = d["resultado"]
+    kills, mortes = res.get("kills_det"), res.get("detalhes_mortes") or []
+    topo = (f"<p><a href='/partida/{pid}'>← Partida</a></p><h1>Kills e mortes · {esc(d['mapa'] or '')} · "
+            f"{data_br(d['data_demo'])}</h1>")
+    if kills is None:
+        return pagina("Kills", topo + "<div class='aviso'>Esta partida foi analisada antes dos detalhes de kills existirem. "
+                      "Reanalise para ver onde e como cada kill aconteceu (a demo precisa continuar numa das pastas vigiadas)."
+                      + form_post("reanalisar", f"<input type='hidden' name='id' value='{pid}'>", "Reanalisar esta partida", "")
+                      + "</div>", "/partidas"), 200
+    modo = (q.get("v") or ["ambas"])[0]
+    if modo not in ("kills", "mortes", "ambas"):
+        modo = "ambas"
+    tabs = "<div class='tabs'>" + "".join(
+        f"<a class='{'on' if modo == v else ''}' href='/partida/{pid}/kills?v={v}'>{rot}</a>"
+        for v, rot in (("ambas", "Kills e mortes"), ("kills", "Só kills"), ("mortes", "Só mortes"))) + "</div>"
+    mapa_html = mapa_kills_svg(kills, mortes, modo)
+    leg = ("<p class='nota'><span style='color:#3ddc97'>●</span> você (kill) → <span style='color:#3ddc97'>✕</span> inimigo abatido · "
+           "<span style='color:#ff6b6b'>◇</span> você (morte) ← <span style='color:#ff6b6b'>○</span> quem te matou. "
+           "O número é o round; passe o mouse para ver arma e distância. É um mapa de pontos: não uso a imagem do radar do jogo.</p>")
+    linhas_k = ""
+    for k in kills:
+        linhas_k += (f"<tr><td>{k['rnd']}</td><td>{k['t']:.0f}s</td><td>{icone_arma(k['arma'], 22)}{esc(_nome_arma(k['arma']))}</td>"
+                     f"<td>{fmt(k.get('dist'), ' m', 0)}</td><td>{fmt(k.get('ttk_ms'), ' ms', 0)}</td>"
+                     f"<td>{_tags_kill(k)}</td><td>{esc(k.get('vitima') or '')}</td></tr>")
+    linhas_m = ""
+    for m in mortes:
+        linhas_m += (f"<tr><td>{m['rnd']}</td><td>{fmt(m.get('t'), 's', 0)}</td><td>{icone_arma(m['arma'], 22)}{esc(_nome_arma(m['arma']))}</td>"
+                     f"<td>{fmt(m.get('dist'), ' m', 0)}</td><td>{_tags_morte(m)}</td><td>{esc(m.get('atacante') or '')}</td></tr>")
+    corpo = topo + tabs + mapa_html + leg
+    if modo in ("kills", "ambas"):
+        corpo += ("<h2>Como foi cada kill</h2>" + ("<table><tr><th>Round</th><th>Tempo</th><th>Arma</th><th>Distância</th>"
+                  "<th title='Do primeiro dano até a morte'>Tempo p/ matar</th><th>Como</th><th>Vítima</th></tr>"
+                  + linhas_k + "</table>" if linhas_k else "<div class='vazio'>Nenhuma kill sua nesta partida.</div>"))
+    if modo in ("mortes", "ambas"):
+        corpo += ("<h2>Como você morreu</h2>" + ("<table><tr><th>Round</th><th>Tempo</th><th>Arma</th><th>Distância</th>"
+                  "<th>Como</th><th>Quem</th></tr>" + linhas_m + "</table>" if linhas_m else "<div class='vazio'>Nenhuma morte.</div>"))
+    return pagina("Kills e mortes", corpo, "/partidas"), 200
+
+
+def partidas_sem_detalhe(todos):
+    return [r for r in todos if r["res"].get("kills_det") is None]
+
+
+def _acha_demo(nome):
+    for d in todas_as_demos():
+        if d.name == nome:
+            return d
+    return None
+
+
+def _celula_bloco(b, ant, chave, casas=0):
+    v = b.get(chave)
+    if v is None:
+        return "<td class='sub'>—</td>"
+    suf = metricas_mod.METRICAS[chave][1] if chave in metricas_mod.METRICAS else ""
+    seta = ""
+    if ant is not None and ant.get(chave) is not None:
+        dif = v - ant[chave]
+        if abs(dif) >= 10 ** -casas:
+            melhor = metricas_mod.METRICAS[chave][2] if chave in metricas_mod.METRICAS else "alto"
+            bom = (dif > 0) == (melhor == "alto")
+            seta = f" <small class='{'up' if bom else 'down'}'>{'▲' if dif > 0 else '▼'}{abs(dif):.{casas}f}</small>"
+    return f"<td>{v:.{casas}f}{esc(suf)}{seta}</td>"
+
+
+def pg_evolucao():
+    sid = escopo()
+    todos = armazem.resultados(sid)
+    topo = "<h1>Evolução</h1><div class='sub'>Como o seu jogo muda ao longo das partidas, em blocos de 15 e por mapa.</div>"
+    if len(todos) < 2:
+        return pagina("Evolução", topo + "<div class='aviso'>Preciso de pelo menos 2 partidas analisadas para mostrar a evolução. "
+                      "Analise mais demos em <a href='/analisar'>Analisar demos</a>.</div>", "/evolucao")
+    bl = metricas_mod.blocos(todos)
+    cols = [("kd", "K/D", 2), ("adr", "ADR", 0), ("hs_kills", "HS kills", 0), ("hs_acertos", "HS/acerto", 0),
+            ("ttk", "Tempo p/ matar", 0), ("rifle_parado", "Acerta parado", 0), ("rifle_correndo", "Corre atirando", 0),
+            ("sem_atirar", "Morte sem atirar", 0), ("abertura", "Abertura", 0)]
+    cab = "".join(f"<th>{esc(r)}</th>" for _, r, _ in cols)
+    linhas = ""
+    for i, b in enumerate(bl):
+        ant = bl[i - 1] if i else None
+        rot = f"{b['de']}–{b['ate']}" + ("" if b["completo"] else " (em andamento)")
+        celulas = "".join(_celula_bloco(b, ant, c, casas) for c, _, casas in cols)
+        linhas += (f"<tr><td><b>{esc(rot)}</b><div class='sub'>{data_br(b['inicio'])[:10]} → {data_br(b['fim'])[:10]}</div></td>"
+                   f"<td>{b['n']}</td>{celulas}</tr>")
+    tabela_b = (f"<h2>A cada {metricas_mod.TAMANHO_BLOCO} partidas</h2><table><tr><th>Partidas</th><th>Jogos</th>{cab}</tr>"
+                f"{linhas}</table><p class='nota'>As setas comparam com o bloco anterior (verde = melhorou, vermelho = piorou, "
+                "considerando que em algumas métricas menos é melhor). Métricas como tempo para matar só existem em partidas "
+                "analisadas na versão nova.</p>")
+
+    def pts_bloco(chave):
+        return [(f"{b['de']}-{b['ate']}", b.get(chave)) for b in bl]
+
+    graf_b = ("<p class='nota'>Os gráficos por bloco aparecem quando houver 2 blocos (30 partidas); até lá, veja a evolução "
+              "partida a partida abaixo.</p>" if len(bl) < 2 else "") + ("" if len(bl) < 2 else "<div class='grid2'>" + grafico_linha(pts_bloco("kd"), "K/D por bloco", casas=2)
+              + grafico_linha(pts_bloco("adr"), "ADR por bloco", casas=0, cor="#3ddc97")
+              + grafico_linha(pts_bloco("rifle_parado"), "Rifle: acerta parado (%)", casas=0, cor="#ffb84c")
+              + grafico_linha(pts_bloco("sem_atirar"), "Mortes sem atirar (%)", casas=0, cor="#ff6b6b") + "</div>")
+
+    def pts_partida(chave):
+        return [(f"{data_br(r['data_demo'])[:5]} {r['mapa'] or ''}", metricas_mod.valor(r["res"], chave)) for r in todos]
+
+    graf_p = ("<h2>Partida a partida</h2><div class='grid2'>" + grafico_linha(pts_partida("kd"), "K/D", casas=2)
+              + grafico_linha(pts_partida("adr"), "ADR", casas=0, cor="#3ddc97") + "</div>")
+    mp = metricas_mod.por_mapa(todos)
+    linhas_m = "".join(f"<tr><td><b>{esc(m['mapa'])}</b></td><td>{m['partidas']}</td><td>{m['kd']:.2f}</td>"
+                       f"<td>{fmt(m['adr'], '', 0)}</td><td>{fmt(m['hs'])}</td><td>{fmt(m['abertura'])}</td>"
+                       f"<td>{fmt(m['sem_atirar'])}</td></tr>" for m in mp)
+    tabela_m = ("<h2>Por mapa</h2><table><tr><th>Mapa</th><th>Partidas</th><th>K/D</th><th>ADR</th><th>HS kills</th>"
+                "<th>Abertura ganha</th><th>Morte sem atirar</th></tr>" + linhas_m + "</table>")
+    velhas = partidas_sem_detalhe(todos)
+    aviso = ""
+    if velhas:
+        aviso = (f"<div class='aviso'>{len(velhas)} partida(s) foram analisadas antes das métricas novas "
+                 "(tempo para matar, kills detalhadas). "
+                 + form_post("reanalisar-todas", "", "Reanalisar essas partidas", "")
+                 + " <span class='sub'>As demos precisam estar nas pastas vigiadas.</span></div>")
+    return pagina("Evolução", topo + aviso + tabela_b + graf_b + graf_p + tabela_m, "/evolucao")
+
+
+# ---- plano de treino semanal ----
+DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+
+
+def _plano_carregar():
+    try:
+        return json.loads(armazem.ajuste_get("plano_treino") or "null")
+    except ValueError:
+        return None
+
+
+def _plano_guardar(p):
+    armazem.ajuste_set("plano_treino", json.dumps(p, ensure_ascii=False))
+
+
+def plano_atual(forcar=False):
+    """Plano vigente; cria um novo se nao ha, se venceu (7 dias) ou se pediram. None se faltam partidas."""
+    sid = escopo()
+    todos = armazem.resultados(sid)
+    p = _plano_carregar()
+    vencido = (not p) or p.get("steamid") != (sid or "") or date.today().isoformat() > p.get("valido_ate", "")
+    if (vencido or forcar) and len(todos) >= 3:
+        if p and p.get("itens"):
+            try:
+                hist = json.loads(armazem.ajuste_get("plano_historico") or "[]")
+            except ValueError:
+                hist = []
+            hist.append({"criado": p["criado"], "itens": [i["titulo"] for i in p["itens"] if i.get("metrica")],
+                         "avaliacao": metricas_mod.avaliar_plano(p, todos),
+                         "feitos": sum(len(v) for v in (p.get("feito") or {}).values())})
+            armazem.ajuste_set("plano_historico", json.dumps(hist[-8:], ensure_ascii=False))
+        p = metricas_mod.gerar_plano(todos)
+        p["steamid"] = sid or ""
+        _plano_guardar(p)
+    return p if p and p.get("steamid", "") == (sid or "") else None
+
+
+def card_treino_hoje():
+    """Resumo para a pagina inicial: o que treinar hoje."""
+    try:
+        p = plano_atual()
+    except Exception:
+        return ""
+    if not p:
+        return ""
+    hoje = date.today()
+    itens = metricas_mod.itens_de_hoje(p, hoje)
+    feitos = p.get("feito") or {}
+    pend = [i for i in itens if hoje.isoformat() not in feitos.get(i["id"], [])]
+    if not itens:
+        return ""
+    txt = ("Tudo feito hoje 🎉" if not pend else "Hoje: " + ", ".join(f"{esc(i['titulo'])} ({i['minutos']} min)" for i in pend))
+    return f"<div class='ok'>🎯 <b>Treino do dia</b> — {txt} · <a href='/treino'>abrir plano</a></div>"
+
+
+def pg_treino():
+    p = plano_atual()
+    sid = escopo()
+    todos = armazem.resultados(sid)
+    topo = "<h1>Plano de treino</h1><div class='sub'>Montado a partir dos seus pontos fracos nas últimas partidas e renovado a cada semana.</div>"
+    if not p:
+        return pagina("Treino", topo + "<div class='aviso'>Preciso de pelo menos 3 partidas analisadas para montar o seu plano. "
+                      "Analise mais demos em <a href='/analisar'>Analisar demos</a>.</div>", "/treino")
+    hoje = date.today()
+    feitos = p.get("feito") or {}
+    itens_hoje = metricas_mod.itens_de_hoje(p, hoje)
+    linhas_hoje = ""
+    for it in itens_hoje:
+        feito = hoje.isoformat() in feitos.get(it["id"], [])
+        botao = ("<span class='pill ok'>feito hoje ✔</span> " if feito else "") + form_post(
+            "treino-feito", f"<input type='hidden' name='id' value='{esc(it['id'])}'>",
+            "Desmarcar" if feito else "Marcar como feito", "sec" if feito else "")
+        linhas_hoje += (f"<tr><td><b>{esc(it['titulo'])}</b><div class='sub'>{esc(it['mapa'])}</div></td>"
+                        f"<td>{it['minutos']} min</td><td>{botao}</td></tr>")
+    total_min = sum(i["minutos"] for i in itens_hoje)
+    hoje_html = (f"<h2>Hoje ({DIAS_SEMANA[hoje.weekday()]}) · {total_min} min</h2><table><tr><th>Treino</th><th>Tempo</th><th></th></tr>"
+                 + linhas_hoje + "</table>")
+    # semana
+    cab = ""
+    for i, dia_nome in enumerate(DIAS_SEMANA):
+        estilo = " style='color:var(--ac)'" if i == hoje.weekday() else ""
+        cab += f"<th{estilo}>{dia_nome}</th>"
+    sem = ""
+    for it in p["itens"]:
+        cel = ""
+        for dia in range(7):
+            marca = "●" if dia in it.get("dias", []) else ""
+            cel += f"<td>{marca}</td>"
+        sem += f"<tr><td>{esc(it['titulo'])}</td>{cel}</tr>"
+    semana_html = f"<h2>Semana</h2><table><tr><th>Treino</th>{cab}</tr>{sem}</table>"
+    # detalhes
+    ava = {a["id"]: a for a in metricas_mod.avaliar_plano(p, todos)}
+    det = ""
+    for it in p["itens"]:
+        a = ava.get(it["id"])
+        prog = ""
+        if it.get("metrica"):
+            rot, suf, melhor, _ = metricas_mod.METRICAS[it["metrica"]]
+            prog = (f"<p class='nota'>{esc(rot)}: antes <b>{it['baseline']:.0f}{esc(suf)}</b> · meta <b>{it['alvo']:.0f}{esc(suf)}</b>")
+            if a and a["atual"] is not None:
+                cls = "ok" if a["melhorou"] else "ruim" if a["melhorou"] is False else ""
+                prog += f" · depois do plano <span class='pill {cls}'>{a['atual']:.0f}{esc(suf)}</span> ({a['n']} partidas)"
+            else:
+                prog += " · <span class='sub'>aguardando 2 partidas novas para medir o efeito</span>"
+            prog += "</p>"
+        det += (f"<div class='dica p3'><h3>{esc(it['titulo'])} · {it['minutos']} min</h3>"
+                f"<p><b>Onde:</b> {esc(it['mapa'])}</p><p><b>Como:</b> {esc(it['como'])}</p>"
+                f"<p class='sub'>Por quê: {esc(it['motivo'])}</p>{prog}</div>")
+    feitos_sem = sum(len(v) for v in feitos.values())
+    cab_plano = (f"<p class='nota'>Plano de {data_br(p['criado'] + ' 00:00')[:10]} até {data_br(p['valido_ate'] + ' 00:00')[:10]}, baseado nas "
+                 f"suas últimas {p.get('n_partidas_base', 0)} partidas. Treinos marcados: <b>{feitos_sem}</b>. "
+                 + form_post("treino-novo", "", "Gerar plano novo agora", "sec", "Gerar um plano novo agora? O atual vai para o histórico.") + "</p>")
+    try:
+        hist = json.loads(armazem.ajuste_get("plano_historico") or "[]")
+    except ValueError:
+        hist = []
+    hist_html = ""
+    if hist:
+        itens_h = ""
+        for h in reversed(hist):
+            res_h = ", ".join(
+                f"{esc(metricas_mod.METRICAS[a['id']][0])}: {a['baseline']:.0f} → {a['atual']:.0f}"
+                for a in h.get("avaliacao", []) if a.get("atual") is not None and a["id"] in metricas_mod.METRICAS) or "sem partidas novas para medir"
+            itens_h += (f"<li>{data_br(h['criado'] + ' 00:00')[:10]} · {h.get('feitos', 0)} treinos marcados · {res_h}</li>")
+        hist_html = f"<details><summary>Planos anteriores</summary><ul>{itens_h}</ul></details>"
+    nota = ("<p class='nota'>Os mapas de treino (Aim Botz, Recoil Master, Yprac, 5E Prac) são mapas da Oficina do Steam "
+            "feitos pela comunidade; o CS2 Coach só sugere, não baixa nada. Treinar em mapa da Oficina não conta nos números do Hub.</p>")
+    return pagina("Treino", topo + cab_plano + hoje_html + semana_html + "<h2>O plano</h2>" + det + hist_html + nota, "/treino")
 
 
 def pg_armas(q):
@@ -1523,8 +1924,15 @@ class Handler(BaseHTTPRequestHandler):
                     if h is None:
                         return self._enviar("Relatório não encontrado.", 404, "text/plain; charset=utf-8")
                     return self._enviar(h, extra={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
+                if len(seg) == 3 and seg[2] == "kills":
+                    corpo, status = pg_kills(pid, q)
+                    return self._enviar(corpo, status)
                 corpo, status = pg_partida(pid)
                 return self._enviar(corpo, status)
+            if rota == "evolucao":
+                return self._enviar(pg_evolucao())
+            if rota == "treino":
+                return self._enviar(pg_treino())
             if rota == "armas" and len(seg) == 1:
                 return self._enviar(pg_armas(q))
             if rota == "arma" and len(seg) == 2:
@@ -1646,6 +2054,41 @@ class Handler(BaseHTTPRequestHandler):
             if not iniciar_analise(demos, steam_do_usuario(), None, False):
                 with E.lock:
                     E.mensagem = "Já existe uma análise em andamento. Aguarde terminar."
+            return self._redirecionar("/analisar")
+        if acao == "treino-novo":
+            plano_atual(forcar=True)
+            return self._redirecionar("/treino")
+        if acao == "treino-feito":
+            p = _plano_carregar()
+            ids = {i["id"] for i in (p or {}).get("itens", [])}
+            if p and (c.get("id") or "") in ids:
+                dias = p.setdefault("feito", {}).setdefault(c["id"], [])
+                hoje_s = date.today().isoformat()
+                if hoje_s in dias:
+                    dias.remove(hoje_s)
+                else:
+                    dias.append(hoje_s)
+                _plano_guardar(p)
+            return self._redirecionar("/treino")
+        if acao in ("reanalisar", "reanalisar-todas"):
+            sid = steam_do_usuario()
+            if acao == "reanalisar":
+                d = armazem.obter_partida(int(c["id"])) if (c.get("id") or "").isdigit() else None
+                nomes = [d["demo"]] if d else []
+            else:
+                nomes = [r["res"].get("meta", {}).get("demo") for r in partidas_sem_detalhe(armazem.resultados(escopo()))]
+            achadas = [x for x in (_acha_demo(n) for n in nomes if n) if x]
+            if not achadas:
+                with E.lock:
+                    E.mensagem = ("Não encontrei o arquivo da demo nas pastas vigiadas. Adicione a pasta onde ela está em "
+                                  "<a href='/analisar'>Analisar demos</a> e tente de novo.")
+                return self._redirecionar("/evolucao")
+            if not iniciar_analise(achadas, sid, None, True):
+                with E.lock:
+                    E.mensagem = "Já existe uma análise em andamento. Aguarde terminar."
+            else:
+                with E.lock:
+                    E.mensagem = f"Reanalisando {len(achadas)} partida(s)... acompanhe em Analisar demos."
             return self._redirecionar("/analisar")
         if acao == "excluir-partida" and (c.get("id") or "").isdigit():
             armazem.excluir_partida(int(c["id"]))

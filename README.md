@@ -26,6 +26,10 @@ Dê dois cliques em `Iniciar CS2 Coach.bat`. Na primeira vez ele prepara tudo so
 - **Armas**: dano por arma e ranking (nota, dano, kills, precisão, dano por tiro, HS%).
 - **Configurações**: seus arquivos do CS2 explicados em português, sugestões (inclusive baseadas nas suas partidas) e
   antes/depois de cada mudança (ADR, K/D, HS, rifles e AWP).
+- **Evolução**: seu jogo a cada 15 partidas e por mapa (K/D, ADR, HS, tempo para matar, rifle parado/correndo, mortes sem atirar).
+- **Treino**: plano semanal montado dos seus pontos fracos, com treino do dia, marcação do que foi feito e o efeito nas partidas seguintes.
+- Em cada partida: **métricas estilo Scope.gg** (HS por acerto, tempo para matar, kills paradas...) com nota contra o seu histórico, e
+  **cada kill e morte** (onde, arma, distância, headshot, parede, fumaça...) num mapa de pontos e em tabela.
 - **Analisar demos**: análise manual, se quiser. Por padrão as demos novas são analisadas sozinhas.
 - **Ao vivo**: painel durante o jogo (detecta o modo sozinho) e as sessões salvas. Sessões de treino têm página detalhada
   mas não entram nos números; só Competitivo/Premier e Braço Direito contam (mude em Ajustes).

@@ -588,3 +588,28 @@ def contar_sessoes_sem_demo() -> int:
     with _db() as con:
         return con.execute("SELECT COUNT(*) FROM sessoes WHERE partida_id IS NULL AND modo IN ("
                            + ",".join("?" * len(contam)) + ")", contam).fetchone()[0]
+
+
+# --------------------------------------------------------------------------
+# Resultados completos (para evolucao, notas e plano de treino)
+# --------------------------------------------------------------------------
+def resultados(steamid=None, mapa=None) -> list:
+    """Partidas em ordem cronologica, cada uma com o resultado completo ja lido: [{id, mapa, data_demo, res}]."""
+    sql = "SELECT id, mapa, data_demo, resultado_json FROM partidas WHERE 1=1"
+    par = []
+    if steamid:
+        sql += " AND steamid=?"
+        par.append(str(steamid))
+    if mapa:
+        sql += " AND mapa=?"
+        par.append(mapa)
+    sql += " ORDER BY data_demo, id"
+    out = []
+    with _db() as con:
+        for r in con.execute(sql, par):
+            try:
+                res = json.loads(r["resultado_json"] or "{}")
+            except ValueError:
+                continue
+            out.append({"id": r["id"], "mapa": r["mapa"], "data_demo": r["data_demo"], "res": res})
+    return out

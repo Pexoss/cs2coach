@@ -336,6 +336,92 @@ def estatisticas_armas(fa, meus, kills) -> list:
     return out
 
 
+# --------------------------------------------------------------------------
+# Kills detalhadas (onde e como) e metricas no estilo Scope.gg
+# --------------------------------------------------------------------------
+def _flag(r, nome):
+    v = getattr(r, nome, False)
+    try:
+        return bool(v) and v == v      # NaN vira False
+    except Exception:
+        return False
+
+
+def _num(v):
+    try:
+        v = float(v)
+        return round(v, 1) if v == v else None
+    except (TypeError, ValueError):
+        return None
+
+
+def detalhar_kills(demo, sid, kills, meus, aberturas):
+    """Uma linha por kill sua: quando, onde, com que arma, a que distancia e como (headshot, parede, fumaca...)."""
+    inicio = {rn: ini for rn, ini, _ in demo.rounds}
+    golpes = {}
+    for r in meus.sort_values("tick").itertuples():
+        golpes.setdefault((int(r.rnd), str(r.user_steamid)), []).append(int(r.tick))
+
+    def inicio_do_duelo(chave, tick_kill):
+        """Primeiro dano da sequencia que terminou na kill (golpes com menos de 1,5 s entre si)."""
+        ini = None
+        for t in reversed([t for t in golpes.get(chave, []) if t <= tick_kill]):
+            if ini is None or ini - t <= int(1.5 * TICKRATE):
+                ini = t
+            else:
+                break
+        return ini
+    ab_ticks = {int(r.tick) for r in aberturas.values() if str(r.attacker_steamid) == sid}
+    out = []
+    for r in kills.sort_values("tick").itertuples():
+        arma = norm_arma(r.weapon)
+        t1 = inicio_do_duelo((int(r.rnd), str(r.user_steamid)), int(r.tick))
+        ttk = max(0, int(r.tick) - t1) * 1000.0 / TICKRATE if t1 is not None else None
+        out.append({
+            "rnd": int(r.rnd), "t": round((int(r.tick) - inicio.get(int(r.rnd), 0)) / TICKRATE, 1),
+            "arma": arma, "dist": _num(r.dist), "hs": _flag(r, "headshot"),
+            "parede": bool(getattr(r, "penetrated", 0) or 0), "sem_mira": _flag(r, "noscope"),
+            "fumaca": _flag(r, "thrusmoke"), "cego": _flag(r, "attackerblind"),
+            "abertura": int(r.tick) in ab_ticks, "ttk_ms": round(ttk) if ttk is not None else None,
+            "vel_voce": _num(r.vel_atacante), "vel_inimigo": _num(r.vel_vitima),
+            "vitima": str(getattr(r, "user_name", "") or ""),
+            "x": _num(r.attacker_X), "y": _num(r.attacker_Y), "vx": _num(r.user_X), "vy": _num(r.user_Y),
+        })
+    return out
+
+
+def metricas_scope(kills_det, meus, classes, geral):
+    """Metricas que o jogo nao mostra: HS por acerto, tempo para matar, kills parado etc."""
+    armas_gun = [k for k in kills_det if ARMA_PARA_CLASSE.get(k["arma"])]
+    rifle = [k for k in armas_gun if ARMA_PARA_CLASSE.get(k["arma"]) == "rifle"]
+
+    def mediana(lista):
+        v = [x for x in lista if x is not None]
+        return round(statistics.median(v)) if v else None
+
+    gun = meus[meus["classe"].notna()] if len(meus) else meus
+    hits = len(gun)
+    hs_hits = int((gun["hitgroup"] == "head").sum()) if hits else 0
+    g_rifle = gun[gun["classe"] == "rifle"] if hits else gun
+    n = len(kills_det)
+    return {
+        "hs_acertos_pct": pct(hs_hits, hits),
+        "hs_acertos_pct_rifle": pct(int((g_rifle["hitgroup"] == "head").sum()), len(g_rifle)) if len(g_rifle) else None,
+        "ttk_ms": mediana([k["ttk_ms"] for k in armas_gun]),
+        "ttk_rifle_ms": mediana([k["ttk_ms"] for k in rifle]),
+        "kills_parado_pct": pct(sum(1 for k in kills_det if (k["vel_voce"] or 0) < VEL_PARADO), n),
+        "kills_correndo_pct": pct(sum(1 for k in kills_det if (k["vel_voce"] or 0) >= VEL_CORRENDO), n),
+        "kills_parede": sum(1 for k in kills_det if k["parede"]),
+        "kills_fumaca": sum(1 for k in kills_det if k["fumaca"]),
+        "kills_sem_mira": sum(1 for k in kills_det if k["sem_mira"]),
+        "kills_cego": sum(1 for k in kills_det if k["cego"]),
+        "dist_media_kill_m": media([k["dist"] for k in kills_det if k["dist"] is not None]),
+        "kills_longe_pct": pct(sum(1 for k in kills_det if (k["dist"] or 0) >= 20), n),
+        "precisao_rifle": (classes.get("rifle") or {}).get("precisao_bala"),
+        "dano_por_round": geral.get("adr"),
+    }
+
+
 def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
     n_rounds = len(demo.rounds)
 
@@ -416,6 +502,7 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
 
     # --- como voce morre ---------------------------------------------------
     detalhes_mortes = []
+    inicio_round = {rn: ini for rn, ini, _ in demo.rounds}
     for r in mortes.itertuples():
         t = int(r.tick)
         lo = bisect.bisect_left(ticks_tiros, t - int(1.5 * TICKRATE))
@@ -432,6 +519,10 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
             "cego": float(r.user_flash_duration) > 1.0,
             "abertura": bool(ab is not None and int(ab.tick) == t),
             "hs": bool(r.headshot),
+            "t": round((t - inicio_round.get(int(r.rnd), 0)) / TICKRATE, 1),
+            "parede": bool(getattr(r, "penetrated", 0) or 0), "fumaca": _flag(r, "thrusmoke"),
+            "atacante": str(getattr(r, "attacker_name", "") or ""),
+            "x": _num(r.user_X), "y": _num(r.user_Y), "ax": _num(r.attacker_X), "ay": _num(r.attacker_Y),
         })
     nm = len(detalhes_mortes)
     mortes_res = {
@@ -487,6 +578,7 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
         data_demo = datetime.fromtimestamp(demo.caminho.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
     except OSError:
         data_demo = datetime.now().strftime("%Y-%m-%d %H:%M")
+    kills_det = detalhar_kills(demo, sid, kills, meus, aberturas)
     res = {
         "meta": {"demo": demo.caminho.name, "mapa": demo.mapa, "jogador": nome, "steamid": sid,
                  "analisado_em": datetime.now().strftime("%Y-%m-%d %H:%M"), "data_demo": data_demo},
@@ -501,6 +593,8 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
         "constancia": {"cv_dano": cv,
                        "pct_rounds_dano_baixo": pct(sum(1 for x in danos if x < 40), len(danos))},
         "detalhes_mortes": detalhes_mortes,
+        "kills_det": kills_det,
+        "scope": metricas_scope(kills_det, meus, por_classe, geral),
     }
     return res
 
