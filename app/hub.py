@@ -222,9 +222,11 @@ ICONES = {
     "/analisar": _I('<path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17z"/>'),
     "/ajustes": _I('<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>'),
 }
-LOGO = ('<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#16212e"/>'
-        '<circle cx="32" cy="32" r="17" fill="none" stroke="#4cc2ff" stroke-width="4"/>'
-        '<path d="M32 7v14M32 43v14M7 32h14M43 32h14" stroke="#4cc2ff" stroke-width="4" stroke-linecap="round"/>'
+LOGO = ('<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#146eeb"/><stop offset="1" stop-color="#5acdff"/></linearGradient></defs>'
+        '<rect width="64" height="64" rx="14" fill="url(#lg)"/>'
+        '<circle cx="32" cy="32" r="15" fill="none" stroke="#fff" stroke-width="3.8"/>'
+        '<path d="M32 9.5v9M32 45.5v9M9.5 32h9M45.5 32h9" stroke="#fff" stroke-width="3.8" stroke-linecap="round"/>'
         '<circle cx="32" cy="32" r="2.6" fill="#fff"/></svg>')
 
 NAV = [("/", "Início"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/evolucao", "Evolução"), ("/treino", "Treino"),
