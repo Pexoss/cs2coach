@@ -820,24 +820,34 @@ class Coach:
 PAGINA = r"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>CS2 Coach ao vivo</title>
 <style>
-:root{--bg:#0f1218;--card:#181d27;--card2:#202736;--tx:#e8ecf3;--mut:#93a0b5;--ac:#4cc2ff;--ok:#4cd68a;--ruim:#ff6b6b;--warn:#ffc857}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:900px;margin:0 auto;padding:20px 16px 50px}h1{font-size:22px;margin:0}
-.sub{color:var(--mut)}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--ruim)}
-.dot.on{background:var(--ok)}h2{font-size:16px;margin:26px 0 10px;border-left:4px solid var(--ac);padding-left:10px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:14px 0}
-.card{background:var(--card);border-radius:10px;padding:10px 14px}.card b{display:block;font-size:24px}.card span{color:var(--mut);font-size:12px}
-.al{background:var(--card);border-left:4px solid var(--ac);border-radius:8px;padding:8px 12px;margin:6px 0}
-.al.ruim{border-color:var(--ruim)}.al.aviso{border-color:var(--warn)}.al.bom{border-color:var(--ok)}.al small{color:var(--mut)}
-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden}
-th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--card2)}th{color:var(--mut);font-size:13px}
-ul{padding-left:20px}.vazio{color:var(--mut)}.ajuda{background:var(--card);border-left:4px solid var(--warn);border-radius:8px;padding:10px 14px;margin:12px 0}.ajuda ol{margin:6px 0 0;padding-left:20px}
-select{background:var(--card);color:var(--tx);border:1px solid var(--card2);border-radius:6px;padding:3px 8px;font:inherit}
-.modo{margin-top:6px}
+:root{--bg:#262626;--card:#2f2f2f;--card2:#353535;--stroke:#3b3b3b;--tx:#fff;--mut:#b4b4b4;--ac:#60cdff;--ok:#6ccb5f;--ruim:#ff99a4;--warn:#fcc84a;--hover:rgba(255,255,255,.06);--sombra:0 2px 8px rgba(0,0,0,.25)}
+@media (prefers-color-scheme:light){:root{--bg:#f8f9fb;--card:#fff;--card2:#eef1f6;--stroke:#dde2ea;--tx:#1a1a1a;--mut:#5f5f5f;--ac:#005fb8;--ok:#0f7b0f;--ruim:#c42b1c;--warn:#9d5d00;--hover:rgba(0,0,0,.05);--sombra:0 2px 8px rgba(0,0,0,.08)}}
+*{box-sizing:border-box}html{color-scheme:dark light}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:6px 4px 40px}
+h1{font:600 22px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:0 0 4px}
+h2{font:600 17px/1.3 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:26px 0 10px}
+.sub{color:var(--mut)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;background:var(--ruim);box-shadow:0 0 0 3px rgba(255,153,164,.18)}
+.dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(108,203,95,.2)}
+.topo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--stroke);border-radius:12px;padding:10px 14px;box-shadow:var(--sombra)}
+.topo .sub{flex:1;min-width:200px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.card{background:var(--card);border:1px solid var(--stroke);border-radius:12px;padding:12px 14px;box-shadow:var(--sombra)}
+.card b{display:block;font:600 26px "Segoe UI Variable Display","Segoe UI",sans-serif}.card span{color:var(--mut);font-size:12px}
+.al{background:var(--card);border:1px solid var(--stroke);border-left:4px solid var(--ac);border-radius:12px;padding:9px 14px;margin:8px 0;box-shadow:var(--sombra)}
+.al.ruim{border-left-color:var(--ruim)}.al.aviso{border-left-color:var(--warn)}.al.bom{border-left-color:var(--ok)}.al small{color:var(--mut)}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border:1px solid var(--stroke);border-radius:12px;overflow:hidden;box-shadow:var(--sombra);margin:8px 0}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--stroke)}th{color:var(--mut);font-weight:600;font-size:12.5px;background:var(--card2)}tr:last-child td{border-bottom:0}
+tr:hover td{background:var(--hover)}
+ul{padding-left:20px}.vazio{color:var(--mut);padding:6px 0}
+.ajuda{background:var(--card);border:1px solid var(--stroke);border-left:4px solid var(--warn);border-radius:12px;padding:10px 14px;margin:12px 0}.ajuda ol{margin:6px 0 0;padding-left:20px}
+select{background:var(--card2);color:var(--tx);border:1px solid var(--stroke);border-bottom:2px solid var(--stroke);border-radius:4px;padding:5px 10px;font:inherit}
+select:focus{outline:0;border-bottom-color:var(--ac)}
+code{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px;border:3px solid var(--bg)}
 </style></head><body><div class="wrap">
-<h1>CS2 Coach ao vivo</h1>
-<div class="sub"><span id="dot" class="dot"></span><span id="status">aguardando o jogo...</span></div>
-<div class="sub modo">Modo: <select id="modo"><option value="auto">Automático</option></select> <span id="modoinfo"></span></div>
+<div class="topo"><div class="sub"><span id="dot" class="dot"></span><b id="status" style="color:var(--tx);font-weight:600">aguardando o jogo...</b></div>
+<div class="sub">Modo: <select id="modo"><option value="auto">Automático</option></select> <span id="modoinfo"></span></div></div>
 <div id="ajuda"></div>
 <div class="cards" id="cards"></div>
 <h2>Avisos</h2><div id="alertas"><div class="vazio">Nenhum aviso ainda.</div></div>

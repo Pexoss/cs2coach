@@ -168,17 +168,15 @@ body.compacto .side{width:60px}body.compacto .side .txt,body.compacto .marca b,b
 body.compacto .side a.item{padding:0;justify-content:center}body.compacto .marca{justify-content:center;padding:6px 0 10px}
 @media (max-width:900px){.side{width:60px}.side .txt,.marca b,.marca small,.side .ver{display:none}.side a.item{padding:0;justify-content:center}.marca{justify-content:center}}
 main{flex:1;min-width:0;margin:8px 8px 8px 0;height:calc(100vh - 16px);overflow:auto;background:var(--bg);border:1px solid var(--stroke);border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
-html.fx body{height:calc(100vh - 38px);margin-top:38px}
-html.fx .side{height:calc(100vh - 38px)}html.fx main{height:calc(100vh - 38px - 8px);margin-top:0}
-html.fx.max main{height:calc(100vh - 38px)}
-#tb{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:center;background:var(--side);z-index:50;user-select:none;-webkit-user-select:none}
-#tb .tit{flex:1;display:flex;align-items:center;gap:9px;height:100%;padding-left:14px;font-size:12px;color:var(--mut)}
-#tb .tit svg{width:16px;height:16px}#tb .tit b{color:var(--tx);font-weight:600}
-#tb button{all:unset;width:46px;height:100%;display:flex;align-items:center;justify-content:center;color:var(--tx);cursor:default}
+html.fx .side{padding-top:6px}
+html.fx main{margin-top:40px;height:calc(100vh - 48px)}
+html.fx.max main{margin:40px 0 0 0;height:calc(100vh - 40px);border-radius:14px 0 0 0}
+#tb{position:fixed;top:0;right:0;height:40px;display:flex;z-index:55;user-select:none;-webkit-user-select:none}
+.dragr{position:fixed;top:0;left:60px;right:140px;height:40px;z-index:50}
+#tb button{all:unset;width:46px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--tx);cursor:default;opacity:.85}
 #tb button svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.2}
-#tb button:hover{background:var(--hover)}#tb button.x:hover{background:#c42b1c;color:#fff}
+#tb button:hover{background:var(--hover);opacity:1}#tb button.x:hover{background:#c42b1c;color:#fff}
 html.fx:not(.max) #tb button.x{border-top-right-radius:12px}
-html.fx.max .tit{pointer-events:auto}
 .gr{position:fixed;z-index:60}.gr.l{left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}.gr.r{right:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
 .gr.t{top:0;left:10px;right:10px;height:4px;cursor:ns-resize}.gr.b{bottom:0;left:10px;right:10px;height:5px;cursor:ns-resize}
 .gr.tl{left:0;top:0;width:10px;height:10px;cursor:nwse-resize}.gr.br{right:0;bottom:0;width:10px;height:10px;cursor:nwse-resize}
@@ -220,9 +218,10 @@ button:hover,.btn:hover{filter:brightness(1.08);text-decoration:none}button:acti
 button.sec,.btn.sec{background:var(--card);color:var(--tx);border-color:var(--stroke);font-weight:400}
 button.sec:hover,.btn.sec:hover{background:var(--card2)}button.perigo{background:var(--perigo-bg);color:var(--perigo-tx)}
 label{display:block;margin:12px 0 4px;color:var(--mut);font-size:12.5px}.campo small{color:var(--mut)}
+button.cp{padding:2px 10px;min-height:26px;font-size:12px;margin:2px 4px 2px 0}
 code,.cmd{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;font-size:12.5px}
 pre{background:var(--card);border-radius:8px;padding:12px;overflow:auto;font-size:12.5px;max-height:340px}
-iframe{width:100%;height:760px;border:1px solid var(--stroke);border-radius:8px;background:#fff}
+iframe{width:100%;height:calc(100vh - 150px);min-height:560px;border:0;border-radius:12px;background:transparent;color-scheme:normal}
 .pill{display:inline-block;background:var(--card2);color:var(--mut);border-radius:999px;padding:1px 9px;font-size:12px}
 .icarma{color:var(--ac);vertical-align:middle;margin-right:8px;width:auto}.icimg{height:30px;vertical-align:middle;margin-right:8px}
 .icmask{display:inline-block;vertical-align:middle;margin-right:8px;background:var(--ac);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
@@ -242,6 +241,8 @@ ICONES = {
     "/treino": _I('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>'),
     "/ao-vivo": _I('<circle cx="12" cy="12" r="2.4"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.7 4.7a10.4 10.4 0 0 0 0 14.6M19.3 4.7a10.4 10.4 0 0 1 0 14.6"/>'),
     "/configuracoes": _I('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'),
+    "/radar": _I('<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
+    "/rever": _I('<circle cx="12" cy="12" r="8"/><path d="m10 8.8 5 3.2-5 3.2z"/>'),
     "/analisar": _I('<path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17z"/>'),
     "/ajustes": _I('<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>'),
 }
@@ -252,7 +253,7 @@ LOGO = ('<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="l
         '<path d="M32 9.5v9M32 45.5v9M9.5 32h9M45.5 32h9" stroke="#fff" stroke-width="3.8" stroke-linecap="round"/>'
         '<circle cx="32" cy="32" r="2.6" fill="#fff"/></svg>')
 
-NAV = [("/", "Início"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/evolucao", "Evolução"), ("/treino", "Treino"),
+NAV = [("/", "Início"), ("/partidas", "Partidas"), ("/armas", "Armas"), ("/evolucao", "Evolução"), ("/radar", "Mapa de mortes"), ("/rever", "Momentos"), ("/treino", "Treino"),
        ("/ao-vivo", "Ao vivo"), ("/configuracoes", "Config. do jogo"), ("/analisar", "Analisar demos")]
 NAV_RODAPE = [("/ajustes", "Ajustes")]
 
@@ -262,11 +263,12 @@ try{if(localStorage.getItem('menu')==='c')document.documentElement.classList.add
 function ajustaMax(){var m=(window.outerWidth>=screen.availWidth-2&&window.outerHeight>=screen.availHeight-2)||!!document.fullscreenElement;document.documentElement.classList.toggle('max',m)}
 window.addEventListener('resize',ajustaMax);document.addEventListener('DOMContentLoaded',ajustaMax);
 function alterna(){var c=document.body.classList.toggle('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}}
+function copia(b){var t=b.dataset.c,o=b.textContent;function ok(){b.textContent='Copiado ✔';setTimeout(function(){b.textContent=o},1500)}try{navigator.clipboard.writeText(t).then(ok,function(){fb()})}catch(e){fb()}function fb(){var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(x)}}
 function api(f,a){try{var p=window.pywebview&&window.pywebview.api;if(p&&p[f])return p[f](a)}catch(e){}}
 function tbMax(){api('alternar')}
 function grip(b){return function(e){if(e.button===0){e.preventDefault();api('redimensionar',b)}}}
 document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.gr').forEach(function(g){g.addEventListener('mousedown',grip(g.dataset.b))});
-var t=document.querySelector('#tb .tit');if(t)t.addEventListener('dblclick',tbMax)});
+var t=document.querySelector('.dragr');if(t)t.addEventListener('dblclick',tbMax)});
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a){e.preventDefault();fetch('/abrir?u='+encodeURIComponent(a.href))}});
 document.addEventListener('DOMContentLoaded',function(){try{if(localStorage.getItem('menu')==='c')document.body.classList.add('compacto')}catch(e){}});
 """
@@ -296,7 +298,7 @@ def pagina(titulo, corpo, ativo="/", refresh=None):
     fx = bool(E.moldura)
     barra = ""
     if fx:
-        barra = ('<div id="tb"><div class="tit pywebview-drag-region">' + LOGO.replace('class=', 'data-x=') + '<span><b>CS2 Coach</b></span></div>'
+        barra = ('<div class="dragr pywebview-drag-region"></div><div id="tb">'
                  '<button onclick="api(\'minimizar\')" title="Minimizar"><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></button>'
                  '<button onclick="tbMax()" title="Maximizar"><svg viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" rx="1"/></svg></button>'
                  '<button class="x" onclick="api(\'fechar\')" title="Fechar"><svg viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9"/></svg></button></div>'
@@ -601,6 +603,7 @@ def pg_partida(pid):
              f"<a class='btn sec' href='/partida/{pid}/kills'>Ver cada kill e morte (onde e como)</a></p>"
              + cards + bloco_scope(armazem.resultados(d.get("steamid")), pid) + "<h2>O que mais pesou</h2>" + (lista_dicas(d["dicas"][:6]) or "<div class='vazio'>Sem pontos fortes de alerta.</div>")
              + "".join(f"<div class='ok'>✔ {esc(f)}</div>" for f in d["fortes"])
+             + bloco_impacto(res) + bloco_momentos_partida(pid, res)
              + "<h2>Dano por arma nesta partida</h2>" + tabela_armas(rk)
              + "<p class='nota'>A nota só existe para armas com 40+ tiros e compara as suas armas entre si; "
                "veja o ranking somado em <a href='/armas'>Armas</a>.</p>")
@@ -825,8 +828,245 @@ def pg_kills(pid, q):
     return pagina("Kills e mortes", corpo, "/partidas"), 200
 
 
+# --------------------------------------------------------------------------
+# Nota de impacto, momentos para rever e mapa de mortes (varias partidas)
+# --------------------------------------------------------------------------
+TIPOS_MOMENTO = {"sem_atirar": "Morte sem atirar", "rajada": "Rajada longa sem kill", "correndo": "Correndo contra alvo parado",
+                 "cego": "Morreu cego", "abertura": "Abertura perdida"}
+
+
+def _copiar(texto, rotulo):
+    return (f"<button class='sec cp' type='button' data-c=\"{esc(texto)}\" onclick='copia(this)' title=\"{esc(texto)}\">"
+            f"{esc(rotulo)}</button>")
+
+
+def _comandos_demo(nome_demo, ir_para):
+    arq = _acha_demo(nome_demo) if nome_demo else None
+    abrir = ""
+    if arq:
+        abrir = _copiar('playdemo "' + str(arq).replace("\\", "/") + '"', "1. copiar: abrir a demo") + " "
+    elif nome_demo:
+        abrir = _copiar('playdemo "' + nome_demo + '"', "1. copiar: abrir a demo") + " "
+    return abrir + _copiar(f"demo_gototick {ir_para}", "2. copiar: ir ao lance")
+
+
+def tabela_momentos(res, limite=None, nome_demo=None):
+    ms = res.get("momentos")
+    if ms is None:
+        return None
+    nome_demo = nome_demo or (res.get("meta") or {}).get("demo")
+    ms = ms[:limite] if limite else ms
+    if not ms:
+        return "<div class='ok'>✔ Nenhum erro marcante encontrado nesta partida.</div>"
+    gcor = {3: "ruim", 2: "", 1: "dados"}
+    linhas = "".join(
+        f"<tr><td>{m['rnd']}</td><td>{m['t']:.0f}s</td><td>{_pill(TIPOS_MOMENTO.get(m['tipo'], m['tipo']), gcor.get(m.get('gravidade'), ''))}</td>"
+        f"<td>{esc(m['texto'])}</td><td>{_nota_html(m.get('nota_round'))}</td><td>{_comandos_demo(nome_demo, m['ir_para'])}</td></tr>"
+        for m in ms)
+    return ("<table><tr><th>Round</th><th>Tempo</th><th>O que houve</th><th></th><th title='Nota de impacto do round'>Impacto</th>"
+            "<th>Comando no jogo</th></tr>" + linhas + "</table>")
+
+
+NOTA_COMANDOS = ("<p class='nota'>Como usar: abra o CS2, abra o console (tecla <code>'</code> ou <code>\"</code>) e cole o 1º comando para "
+                 "abrir a demo. Quando ela carregar, cole o 2º para pular para 5 segundos antes do lance. "
+                 "Se a demo já estiver aberta, use só o 2º.</p>")
+
+
+def bloco_impacto(res):
+    im = (res.get("impacto") or {}).get("rounds") or []
+    if not im:
+        return ""
+    media_ = (res.get("impacto") or {}).get("media")
+    melhores = sorted(im, key=lambda x: -x["nota"])[:3]
+    piores = sorted(im, key=lambda x: x["nota"])[:3]
+    graf = grafico_linha([(f"round {i['rnd']}", i["nota"]) for i in im], "Nota de impacto por round", "", "#8b6cff", 0) if len(im) >= 3 else ""
+    graf = f"<div style='max-width:640px'>{graf}</div>" if graf else ""
+
+    def lin(i):
+        tags = " · ".join(i["tags"]) or "sem ação marcante"
+        return (f"<tr><td>{i['rnd']}</td><td>{_nota_html(i['nota'])}</td><td class='sub'>{esc(tags)}</td></tr>")
+    todas = "".join(lin(i) for i in im)
+    return ("<h2>Impacto por round</h2>"
+            f"<div class='cards'><div class='card'><b>{fmt(media_, '', 0)}</b><span>Impacto médio (0-100)</span></div>"
+            f"<div class='card'><b>{melhores[0]['rnd']}</b><span>Seu melhor round ({melhores[0]['nota']})</span></div>"
+            f"<div class='card'><b>{piores[0]['rnd']}</b><span>Seu pior round ({piores[0]['nota']})</span></div></div>"
+            + graf +
+            "<details><summary>Ver a nota de cada round e o que pesou</summary><table><tr><th>Round</th><th>Nota</th><th>O que pesou</th></tr>"
+            + todas + "</table></details>"
+            "<p class='nota'>A nota soma: dano, kills, abrir o round, kills em desvantagem numérica, dano de granada, assistências "
+            "e se o round foi ganho (e você sobreviveu). É uma medida própria para comparar os seus rounds entre si, não a nota de outro site.</p>")
+
+
+def bloco_momentos_partida(pid, res):
+    t = tabela_momentos(res, limite=6)
+    if t is None:
+        return ""
+    return ("<h2>Momentos para rever</h2>" + t + NOTA_COMANDOS
+            + f"<p><a href='/rever?p={pid}'>Ver todos os momentos desta partida</a> · <a href='/rever'>Momentos de todas as partidas</a></p>")
+
+
+def pg_rever(q):
+    sid = escopo()
+    todos = list(reversed(armazem.resultados(sid)))
+    pid_f = (q.get("p") or [""])[0]
+    tipo_f = (q.get("t") or [""])[0]
+    if pid_f.isdigit():
+        todos = [r for r in todos if r["id"] == int(pid_f)]
+    else:
+        todos = todos[:12]
+    tabs = "<div class='tabs'>" + "".join(
+        f"<a class='{'on' if tipo_f == k else ''}' href='/rever?t={k}'>{esc(v)}</a>"
+        for k, v in (("", "Todos"),) + tuple(TIPOS_MOMENTO.items())) + "</div>" if not pid_f.isdigit() else ""
+    blocos, sem = "", 0
+    for r in todos:
+        res = r["res"]
+        if res.get("momentos") is None:
+            sem += 1
+            continue
+        res2 = dict(res)
+        if tipo_f in TIPOS_MOMENTO:
+            res2["momentos"] = [m for m in res["momentos"] if m["tipo"] == tipo_f]
+        if not res2["momentos"]:
+            continue
+        blocos += (f"<h2><a href='/partida/{r['id']}'>{esc(r['mapa'] or '')} · {data_br(r['data_demo'])}</a></h2>"
+                   + tabela_momentos(res2))
+    aviso = ""
+    if sem:
+        aviso = (f"<div class='aviso'>{sem} partida(s) foram analisadas antes desta função existir e ainda não têm momentos. "
+                 "Elas serão atualizadas quando você reanalisar (a demo precisa estar numa das pastas vigiadas). "
+                 + form_post("reanalisar-todas", "", "Reanalisar essas partidas", "") + "</div>")
+    corpo = ("<h1>Momentos para rever</h1><p class='sub'>Rounds com erro: morte sem atirar, rajada longa sem kill, correr contra alvo parado, "
+             "morrer cego e aberturas perdidas. Cada um vem com o comando para ir direto ao lance na demo.</p>"
+             + tabs + aviso + (blocos or "<div class='vazio'>Nenhum momento encontrado com esse filtro.</div>") + NOTA_COMANDOS)
+    return pagina("Momentos para rever", corpo, "/rever")
+
+
+def _zona(x, y, minx, miny, cw, ch, n=8):
+    c = min(n - 1, max(0, int((x - minx) / cw)))
+    r = min(n - 1, max(0, int((y - miny) / ch)))
+    return c, r
+
+
+def pg_radar(q):
+    sid = escopo()
+    todos = armazem.resultados(sid)
+    mapas = {}
+    for r in todos:
+        if (r["res"].get("detalhes_mortes") or r["res"].get("kills_det")) is not None:
+            mapas[r["mapa"]] = mapas.get(r["mapa"], 0) + 1
+    topo = "<h1>Mapa de mortes e kills</h1>"
+    if not mapas:
+        return pagina("Mapa de mortes", topo + "<div class='vazio'>Analise algumas demos para ver onde você mais morre e mata.</div>",
+                      "/radar")
+    m = (q.get("m") or [""])[0]
+    if m not in mapas:
+        m = max(mapas, key=lambda k: mapas[k])
+    modo = (q.get("v") or ["ambas"])[0]
+    if modo not in ("kills", "mortes", "ambas"):
+        modo = "ambas"
+    tabs = "<div class='tabs'>" + "".join(
+        f"<a class='{'on' if k == m else ''}' href='/radar?m={esc(k)}&v={modo}'>{esc(k)} ({n})</a>"
+        for k, n in sorted(mapas.items(), key=lambda kv: -kv[1])) + "</div>"
+    tabs2 = "<div class='tabs'>" + "".join(
+        f"<a class='{'on' if modo == v else ''}' href='/radar?m={esc(m)}&v={v}'>{rot}</a>"
+        for v, rot in (("ambas", "Mortes e kills"), ("mortes", "Só mortes"), ("kills", "Só kills"))) + "</div>"
+    rs = [r for r in todos if r["mapa"] == m]
+    mortes, kills = [], []
+    for r in rs:
+        mortes += [x for x in (r["res"].get("detalhes_mortes") or []) if x.get("x") is not None and x.get("y") is not None]
+        kills += [x for x in (r["res"].get("kills_det") or []) if x.get("x") is not None and x.get("y") is not None]
+    pts = [(x["x"], x["y"]) for x in mortes] + [(x["x"], x["y"]) for x in kills]
+    if not pts:
+        return pagina("Mapa de mortes", topo + tabs + "<div class='vazio'>Sem posições nesse mapa.</div>", "/radar")
+    N = 8
+    minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
+    miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
+    w, h, mg = 700, 520, 24
+    sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
+    ox = mg + ((w - 2 * mg) - (maxx - minx) * sc) / 2
+    oy = mg + ((h - 2 * mg) - (maxy - miny) * sc) / 2
+    cw, ch = max(maxx - minx, 1) / N, max(maxy - miny, 1) / N
+
+    def X(x):
+        return ox + (x - minx) * sc
+
+    def Y(y):
+        return h - oy - (y - miny) * sc
+    zonas = {}
+    for x in mortes:
+        z = zonas.setdefault(_zona(x["x"], x["y"], minx, miny, cw, ch, N), {"m": 0, "k": 0, "tipos": {}, "armas": {}})
+        z["m"] += 1
+        z["tipos"][x.get("tipo") or tipo_de_duelo_hub(x)] = z["tipos"].get(x.get("tipo") or tipo_de_duelo_hub(x), 0) + 1
+        a = _nome_arma(x["arma"])
+        z["armas"][a] = z["armas"].get(a, 0) + 1
+    for x in kills:
+        z = zonas.setdefault(_zona(x["x"], x["y"], minx, miny, cw, ch, N), {"m": 0, "k": 0, "tipos": {}, "armas": {}})
+        z["k"] += 1
+    maxm = max([z["m"] for z in zonas.values()] + [1])
+    sv = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Mapa de mortes e kills" style="background:var(--card2);border-radius:12px;width:100%;height:auto">']
+    for (c, r), z in zonas.items():
+        if modo != "kills" and z["m"]:
+            x0, y1 = X(minx + c * cw), Y(miny + r * ch)
+            sv.append(f'<rect x="{x0:.1f}" y="{Y(miny + (r + 1) * ch):.1f}" width="{cw * sc:.1f}" height="{ch * sc:.1f}" '
+                      f'fill="#ff6b6b" opacity="{0.08 + 0.45 * z["m"] / maxm:.2f}"/>')
+    for i in range(N + 1):
+        sv.append(f'<line x1="{X(minx + i * cw):.1f}" x2="{X(minx + i * cw):.1f}" y1="{Y(miny):.1f}" y2="{Y(maxy):.1f}" stroke="rgba(128,128,128,.25)"/>'
+                  f'<line y1="{Y(miny + i * ch):.1f}" y2="{Y(miny + i * ch):.1f}" x1="{X(minx):.1f}" x2="{X(maxx):.1f}" stroke="rgba(128,128,128,.25)"/>')
+    for c in range(N):
+        sv.append(f'<text x="{X(minx + (c + .5) * cw):.1f}" y="{h - 6}" fill="var(--mut)" font-size="11" text-anchor="middle">{"ABCDEFGH"[c]}</text>')
+    for r in range(N):
+        sv.append(f'<text x="8" y="{Y(miny + (r + .5) * ch) + 4:.1f}" fill="var(--mut)" font-size="11">{r + 1}</text>')
+    if modo in ("kills", "ambas"):
+        for x in kills:
+            sv.append(f'<circle cx="{X(x["x"]):.1f}" cy="{Y(x["y"]):.1f}" r="3.2" fill="#3ddc97" opacity=".75">'
+                      f'<title>Kill · {esc(_nome_arma(x["arma"]))} · {x.get("dist") or 0:.0f} m</title></circle>')
+    if modo in ("mortes", "ambas"):
+        for x in mortes:
+            cx, cy = X(x["x"]), Y(x["y"])
+            sv.append(f'<rect x="{cx - 3.6:.1f}" y="{cy - 3.6:.1f}" width="7.2" height="7.2" fill="#ff6b6b" opacity=".9" '
+                      f'transform="rotate(45 {cx:.1f} {cy:.1f})"><title>Morte · {esc(x.get("tipo") or "")} · {esc(_nome_arma(x["arma"]))} · {x["dist"]:.0f} m</title></rect>')
+    sv.append("</svg>")
+    top = sorted(zonas.items(), key=lambda kv: (-kv[1]["m"], -kv[1]["k"]))[:8]
+    linhas = ""
+    for (c, r), z in top:
+        if not z["m"] and not z["k"]:
+            continue
+        tipo = max(z["tipos"].items(), key=lambda kv: kv[1])[0] if z["tipos"] else "—"
+        arma = max(z["armas"].items(), key=lambda kv: kv[1])[0] if z["armas"] else "—"
+        saldo = z["k"] - z["m"]
+        linhas += (f"<tr><td><b>{'ABCDEFGH'[c]}{r + 1}</b></td><td>{z['m']}</td><td>{z['k']}</td>"
+                   f"<td class='{'up' if saldo > 0 else 'down' if saldo < 0 else ''}'>{saldo:+d}</td><td>{esc(tipo)}</td><td>{esc(arma)}</td></tr>")
+    tipos_tot = {}
+    for x in mortes:
+        t = x.get("tipo") or tipo_de_duelo_hub(x)
+        tipos_tot[t] = tipos_tot.get(t, 0) + 1
+    resumo_t = " · ".join(f"{esc(k)}: {v}" for k, v in sorted(tipos_tot.items(), key=lambda kv: -kv[1]))
+    corpo = (topo + f"<p class='sub'>{len(rs)} partida(s) em {esc(m)} · {len(mortes)} mortes · {len(kills)} kills. "
+             "Cada quadrado do mapa é uma zona (letra = coluna, número = linha); quanto mais vermelho, mais você morre ali.</p>"
+             + tabs + tabs2 + "".join(sv)
+             + "<p class='nota'><span style='color:#3ddc97'>●</span> onde você estava ao fazer uma kill · "
+               "<span style='color:#ff6b6b'>◆</span> onde você estava ao morrer. Passe o mouse para ver arma, tipo de duelo e distância. "
+               "É um mapa de pontos e zonas: o jogo não entrega a imagem do radar.</p>"
+             + "<h2>Zonas onde você mais morre</h2>"
+             + ("<table><tr><th>Zona</th><th>Mortes</th><th>Kills</th><th>Saldo</th><th>Duelo mais comum</th><th>Arma que mais te mata</th></tr>"
+                + linhas + "</table>" if linhas else "<div class='vazio'>Sem dados.</div>")
+             + (f"<h2>Em que tipo de duelo você morre</h2><p>{resumo_t}</p>" if resumo_t else "")
+             + "<p class='nota'>Saldo = kills menos mortes na zona. Zonas com saldo negativo e muitas mortes são as que valem treino ou outra forma de entrar.</p>")
+    return pagina("Mapa de mortes", corpo, "/radar")
+
+
+def tipo_de_duelo_hub(m):
+    """Partidas analisadas antes do campo 'tipo' existir: calcula o rotulo aqui."""
+    if m.get("abertura"):
+        return "Abertura de round"
+    if m.get("fora_visao"):
+        return "Por trás/lado (fora da mira)"
+    d = m.get("dist") or 0
+    return "Longa distância" if d >= 25 else "Curta distância" if d < 8 else "Média distância"
+
+
 def partidas_sem_detalhe(todos):
-    return [r for r in todos if r["res"].get("kills_det") is None]
+    return [r for r in todos if r["res"].get("kills_det") is None or r["res"].get("momentos") is None]
 
 
 def _acha_demo(nome):
@@ -2072,6 +2312,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._enviar(corpo, status)
                 corpo, status = pg_partida(pid)
                 return self._enviar(corpo, status)
+            if rota == "radar":
+                return self._enviar(pg_radar(q))
+            if rota == "rever":
+                return self._enviar(pg_rever(q))
             if rota == "evolucao":
                 return self._enviar(pg_evolucao())
             if rota == "treino":

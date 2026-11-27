@@ -147,6 +147,7 @@ class Demo:
         ticks = [int(df["tick"].max()) for df in (self.fire, self.hurt, self.death) if len(df)]
         self.ultimo_tick = max(ticks) if ticks else 0
         self.rounds = self._segmentar_rounds()
+        self.vencedores = self._vencedores()
 
         self.fire = self._marcar(self.fire)
         self.hurt = self._marcar(self.hurt)
@@ -165,6 +166,23 @@ class Demo:
         if not segs:  # demo sem eventos de round: trata tudo como um round
             segs = [(1, inicio, self.ultimo_tick)]
         return segs
+
+    def _vencedores(self):
+        """{round: time vencedor (2 = T, 3 = CT)}; vazio se a demo nao trouxe o vencedor."""
+        out = {}
+        try:
+            re_ = evento(self.parser, "round_end")
+            if "winner" not in re_.columns:
+                return out
+            for rn, _, fim in self.rounds:
+                linhas = re_[re_["tick"] == fim]
+                if len(linhas):
+                    w = linhas.iloc[0]["winner"]
+                    w = {"T": 2, "CT": 3}.get(str(w).upper(), w)
+                    out[rn] = int(w)
+        except Exception:
+            pass
+        return out
 
     def _marcar(self, df):
         if not len(df):
@@ -379,7 +397,7 @@ def detalhar_kills(demo, sid, kills, meus, aberturas):
         ttk = max(0, int(r.tick) - t1) * 1000.0 / TICKRATE if t1 is not None else None
         out.append({
             "rnd": int(r.rnd), "t": round((int(r.tick) - inicio.get(int(r.rnd), 0)) / TICKRATE, 1),
-            "arma": arma, "dist": _num(r.dist), "hs": _flag(r, "headshot"),
+            "tick": int(r.tick), "arma": arma, "dist": _num(r.dist), "hs": _flag(r, "headshot"),
             "parede": bool(getattr(r, "penetrated", 0) or 0), "sem_mira": _flag(r, "noscope"),
             "fumaca": _flag(r, "thrusmoke"), "cego": _flag(r, "attackerblind"),
             "abertura": int(r.tick) in ab_ticks, "ttk_ms": round(ttk) if ttk is not None else None,
@@ -416,6 +434,145 @@ def detalhar_acertos(demo, meus):
         d["dist_media"] = round(sum(dists) / len(dists), 1) if dists else None
         rounds.append(d)
     return {"rounds": rounds, "locais": total}
+
+
+def tipo_de_duelo(m):
+    """Rotulo unico do duelo em que voce morreu (usado no mapa e nas somas)."""
+    if m.get("abertura"):
+        return "Abertura de round"
+    if m.get("fora_visao"):
+        return "Por trás/lado (fora da mira)"
+    if (m.get("dist") or 0) >= 25:
+        return "Longa distância"
+    if (m.get("dist") or 0) < 8:
+        return "Curta distância"
+    return "Média distância"
+
+
+UTILITARIOS = {"hegrenade", "inferno", "molotov", "incgrenade"}
+
+
+def _vivos(demo, meu_time, rn, tick, n_time):
+    """Quantos jogadores vivos (seu time, outro time) imediatamente antes de 'tick' no round."""
+    d = demo.death
+    d = d[(d["rnd"] == rn) & (d["tick"] < tick)]
+    meus_mortos = int((d["user_team_num"] == meu_time).sum())
+    deles_mortos = int((d["user_team_num"] != meu_time).sum())
+    return max(0, n_time[meu_time] - meus_mortos), max(0, n_time[5 - meu_time] - deles_mortos)
+
+
+def nota_de_impacto(demo, sid, kills, mortes, aberturas, meus, rounds_info):
+    """Nota 0-100 por round: dano, kills, abertura, utilitario, kills em desvantagem numerica e resultado do round.
+    Heuristica propria (nao e a nota de nenhum site): serve para comparar os seus rounds entre si."""
+    info = demo.jogadores
+    meu_time = None
+    sel = info[info["steamid"] == str(sid)]
+    if len(sel):
+        meu_time = int(sel.iloc[0]["team_number"])
+    n_time = {}
+    for t in (2, 3):
+        n_time[t] = max(1, min(5, int((info["team_number"] == t).sum())))
+    util = {}
+    for r in meus.itertuples():
+        if norm_arma(r.weapon) in UTILITARIOS:
+            util[int(r.rnd)] = util.get(int(r.rnd), 0) + int(r.dmg_health)
+    ass = {}
+    if "assister_steamid" in demo.death.columns:
+        a = demo.death[(demo.death["assister_steamid"].astype(str) == sid)
+                       & (demo.death["attacker_team_num"] != demo.death["user_team_num"])]
+        for r in a.itertuples():
+            ass[int(r.rnd)] = ass.get(int(r.rnd), 0) + 1
+    kills_por = {}
+    for r in kills.itertuples():
+        kills_por.setdefault(int(r.rnd), []).append(int(r.tick))
+    out = []
+    for ri in rounds_info:
+        rn = ri["rnd"]
+        pontos, tags = 0.0, []
+        dano = ri["dano"]
+        pontos += min(dano, 150) / 100 * 25
+        if dano:
+            tags.append(f"{dano} de dano")
+        nk = ri["kills"]
+        pontos += nk * 14
+        if nk:
+            tags.append(f"{nk} kill" + ("s" if nk != 1 else ""))
+        ab = aberturas.get(rn)
+        if ab is not None and str(ab.attacker_steamid) == sid:
+            pontos += 10
+            tags.append("abriu o round")
+        elif ab is not None and str(ab.user_steamid) == sid:
+            pontos -= 8
+            tags.append("morreu na abertura")
+        if meu_time is not None:
+            for t in kills_por.get(rn, []):
+                eu, eles = _vivos(demo, meu_time, rn, t, n_time)
+                if eles > eu:
+                    pontos += 6
+                    tags.append(f"kill em desvantagem ({eu}x{eles})")
+        u = util.get(rn, 0)
+        if u:
+            pontos += min(u, 60) / 60 * 8
+            tags.append(f"{u} de dano de granada")
+        na = ass.get(rn, 0)
+        if na:
+            pontos += 4 * na
+            tags.append(f"{na} assistência" + ("s" if na != 1 else ""))
+        venceu = None
+        if meu_time is not None and rn in demo.vencedores:
+            venceu = demo.vencedores[rn] == meu_time
+            if venceu:
+                pontos += 8
+                tags.append("round ganho")
+                if not ri["morreu"]:
+                    pontos += 4
+                    tags.append("sobreviveu")
+        if ri["morreu"] and not dano and not nk:
+            pontos -= 6
+            tags.append("morreu sem causar dano")
+        out.append({"rnd": rn, "nota": int(max(0, min(100, round(pontos)))), "tags": tags, "venceu": venceu,
+                    "util": u})
+    return out
+
+
+def momentos_para_rever(demo, detalhes_mortes, rajadas, ticks_tiros, nota_por_round, kills_round=None):
+    """Rounds com erro de verdade, cada um com o tick para pular direto na demo (5 s antes do lance)."""
+    inicio = {rn: ini for rn, ini, _ in demo.rounds}
+    out = []
+
+    def add(rn, tick, tipo, texto, gravidade):
+        out.append({"rnd": rn, "tick": int(tick), "ir_para": max(0, int(tick) - 5 * TICKRATE),
+                    "t": round((int(tick) - inicio.get(rn, 0)) / TICKRATE, 1), "tipo": tipo, "texto": texto, "gravidade": gravidade})
+    for m in detalhes_mortes:
+        tick = m.get("tick")
+        if tick is None:
+            continue
+        lo = bisect.bisect_left(ticks_tiros, tick - int(4 * TICKRATE))
+        hi = bisect.bisect_right(ticks_tiros, tick)
+        if hi - lo == 0:
+            ja = (kills_round or {}).get(m["rnd"], 0)
+            extra = f" Você já tinha {ja} kill(s) no round." if ja else ""
+            add(m["rnd"], tick, "sem_atirar", f"Morreu sem atirar nos 4 s antes (a {m['dist']:.0f} m, {_nome_curto(m['arma'])}).{extra}",
+                1 if ja else 3)
+        elif m.get("vel_voce", 0) >= VEL_CORRENDO and m.get("vel_inimigo", 999) < VEL_PARADO:
+            add(m["rnd"], tick, "correndo", "Morreu correndo contra um inimigo parado: pare para atirar.", 2)
+        elif m.get("cego"):
+            add(m["rnd"], tick, "cego", "Morreu cego por flash.", 1)
+        elif m.get("abertura") and m.get("fora_visao"):
+            add(m["rnd"], tick, "abertura", "Abertura perdida com o inimigo fora da sua mira.", 2)
+    for r in rajadas:
+        if r["classe"] in ("rifle", "smg", "metralhadora") and r["n"] >= 10 and not r["kill"]:
+            add(r["rnd"], r["t0"], "rajada", f"Rajada de {r['n']} balas sem kill ({_nome_curto(r['arma'])}): solte o gatilho e recomece.", 2)
+    out.sort(key=lambda x: (-x["gravidade"], x["rnd"], x["tick"]))
+    notas = {n["rnd"]: n["nota"] for n in nota_por_round}
+    for x in out:
+        x["nota_round"] = notas.get(x["rnd"])
+    return out
+
+
+def _nome_curto(a):
+    return str(a).replace("weapon_", "")
+
 
 
 def metricas_scope(kills_det, meus, classes, geral):
@@ -528,6 +685,9 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
             "morreu_em_s": round((morte_round[rn] - ini) / TICKRATE, 1) if rn in morte_round else None,
         })
 
+    for rn, ini, fim in demo.rounds:
+        rounds_info[rn - 1]["tick_ini"], rounds_info[rn - 1]["tick_fim"] = int(ini), int(fim)
+
     # --- como voce morre ---------------------------------------------------
     detalhes_mortes = []
     inicio_round = {rn: ini for rn, ini, _ in demo.rounds}
@@ -540,7 +700,7 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
         diff = abs((bearing - r.user_yaw + 180) % 360 - 180)
         ab = aberturas.get(int(r.rnd))
         detalhes_mortes.append({
-            "rnd": int(r.rnd), "arma": norm_arma(r.weapon), "dist": float(r.dist),
+            "rnd": int(r.rnd), "tick": t, "arma": norm_arma(r.weapon), "dist": float(r.dist),
             "vel_voce": float(r.vel_vitima), "vel_inimigo": float(r.vel_atacante),
             "tiros_antes": tiros_antes, "fora_visao": diff > FORA_DE_VISAO_GRAUS,
             "angulo": round(float(diff), 1),
@@ -552,6 +712,8 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
             "atacante": str(getattr(r, "attacker_name", "") or ""),
             "x": _num(r.user_X), "y": _num(r.user_Y), "ax": _num(r.attacker_X), "ay": _num(r.attacker_Y),
         })
+    for m in detalhes_mortes:
+        m["tipo"] = tipo_de_duelo(m)
     nm = len(detalhes_mortes)
     mortes_res = {
         "total": nm,
@@ -607,6 +769,16 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
     except OSError:
         data_demo = datetime.now().strftime("%Y-%m-%d %H:%M")
     kills_det = detalhar_kills(demo, sid, kills, meus, aberturas)
+    try:
+        impacto = nota_de_impacto(demo, sid, kills, mortes, aberturas, meus, rounds_info)
+    except Exception:
+        impacto = []
+    for ri, im in zip(rounds_info, impacto):
+        ri["impacto"] = im["nota"]
+    try:
+        momentos = momentos_para_rever(demo, detalhes_mortes, rajadas, ticks_tiros, impacto, kills_round)
+    except Exception:
+        momentos = []
     res = {
         "meta": {"demo": demo.caminho.name, "mapa": demo.mapa, "jogador": nome, "steamid": sid,
                  "analisado_em": datetime.now().strftime("%Y-%m-%d %H:%M"), "data_demo": data_demo},
@@ -623,6 +795,8 @@ def analisar_jogador(demo: Demo, sid: str, nome: str) -> dict:
         "detalhes_mortes": detalhes_mortes,
         "kills_det": kills_det,
         "acertos_det": detalhar_acertos(demo, meus),
+        "impacto": {"rounds": impacto, "media": media([i["nota"] for i in impacto])},
+        "momentos": momentos,
         "scope": metricas_scope(kills_det, meus, por_classe, geral),
     }
     return res
