@@ -65,6 +65,7 @@ class Estado:
         self.mensagem = None                       # aviso de uma acao (mostrado uma vez)
         self.update = None                         # {'versao','url','download','notas'} se houver versao nova
         self.update_erro = None
+        self.moldura = False                       # True: a janela do programa nao tem moldura do Windows (barra propria)
         self.mostrar_janela = None                 # funcao que traz a janela do programa para frente
         self.parar = threading.Event()             # 'Sair' no icone da bandeja
         self.dl = None                             # download da versao nova: {'estado','bytes','total','arquivo','erro'}
@@ -167,6 +168,23 @@ body.compacto .side{width:60px}body.compacto .side .txt,body.compacto .marca b,b
 body.compacto .side a.item{padding:0;justify-content:center}body.compacto .marca{justify-content:center;padding:6px 0 10px}
 @media (max-width:900px){.side{width:60px}.side .txt,.marca b,.marca small,.side .ver{display:none}.side a.item{padding:0;justify-content:center}.marca{justify-content:center}}
 main{flex:1;min-width:0;margin:8px 8px 8px 0;height:calc(100vh - 16px);overflow:auto;background:var(--bg);border:1px solid var(--stroke);border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+html.fx body{height:calc(100vh - 38px);margin-top:38px}
+html.fx .side{height:calc(100vh - 38px)}html.fx main{height:calc(100vh - 38px - 8px);margin-top:0}
+html.fx.max main{height:calc(100vh - 38px)}
+#tb{position:fixed;top:0;left:0;right:0;height:38px;display:flex;align-items:center;background:var(--side);z-index:50;user-select:none;-webkit-user-select:none}
+#tb .tit{flex:1;display:flex;align-items:center;gap:9px;height:100%;padding-left:14px;font-size:12px;color:var(--mut)}
+#tb .tit svg{width:16px;height:16px}#tb .tit b{color:var(--tx);font-weight:600}
+#tb button{all:unset;width:46px;height:100%;display:flex;align-items:center;justify-content:center;color:var(--tx);cursor:default}
+#tb button svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.2}
+#tb button:hover{background:var(--hover)}#tb button.x:hover{background:#c42b1c;color:#fff}
+html.fx:not(.max) #tb button.x{border-top-right-radius:12px}
+html.fx.max .tit{pointer-events:auto}
+.gr{position:fixed;z-index:60}.gr.l{left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}.gr.r{right:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
+.gr.t{top:0;left:10px;right:10px;height:4px;cursor:ns-resize}.gr.b{bottom:0;left:10px;right:10px;height:5px;cursor:ns-resize}
+.gr.tl{left:0;top:0;width:10px;height:10px;cursor:nwse-resize}.gr.br{right:0;bottom:0;width:10px;height:10px;cursor:nwse-resize}
+.gr.tr{right:0;top:0;width:10px;height:10px;cursor:nesw-resize}.gr.bl{left:0;bottom:0;width:10px;height:10px;cursor:nesw-resize}
+html.fx.max .gr{display:none}
+html.fx:not(.max)::after{content:"";position:fixed;inset:0;border:1px solid rgba(128,128,128,.45);border-radius:12px;pointer-events:none;z-index:70}
 html.max main{margin:0;height:100vh;border-radius:0;border-width:0 0 0 1px;box-shadow:none}
 main::-webkit-scrollbar,.side::-webkit-scrollbar{width:12px}
 main::-webkit-scrollbar-thumb,.side::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px;border:3px solid transparent;background-clip:content-box}
@@ -244,6 +262,11 @@ try{if(localStorage.getItem('menu')==='c')document.documentElement.classList.add
 function ajustaMax(){var m=(window.outerWidth>=screen.availWidth-2&&window.outerHeight>=screen.availHeight-2)||!!document.fullscreenElement;document.documentElement.classList.toggle('max',m)}
 window.addEventListener('resize',ajustaMax);document.addEventListener('DOMContentLoaded',ajustaMax);
 function alterna(){var c=document.body.classList.toggle('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}}
+function api(f,a){try{var p=window.pywebview&&window.pywebview.api;if(p&&p[f])return p[f](a)}catch(e){}}
+function tbMax(){api('alternar')}
+function grip(b){return function(e){if(e.button===0){e.preventDefault();api('redimensionar',b)}}}
+document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.gr').forEach(function(g){g.addEventListener('mousedown',grip(g.dataset.b))});
+var t=document.querySelector('#tb .tit');if(t)t.addEventListener('dblclick',tbMax)});
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a){e.preventDefault();fetch('/abrir?u='+encodeURIComponent(a.href))}});
 document.addEventListener('DOMContentLoaded',function(){try{if(localStorage.getItem('menu')==='c')document.body.classList.add('compacto')}catch(e){}});
 """
@@ -270,9 +293,17 @@ def pagina(titulo, corpo, ativo="/", refresh=None):
         if E.mensagem:
             msg = f'<div class="aviso">{E.mensagem}</div>'
             E.mensagem = None
-    return (f'<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">{meta}'
+    fx = bool(E.moldura)
+    barra = ""
+    if fx:
+        barra = ('<div id="tb"><div class="tit pywebview-drag-region">' + LOGO.replace('class=', 'data-x=') + '<span><b>CS2 Coach</b></span></div>'
+                 '<button onclick="api(\'minimizar\')" title="Minimizar"><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></button>'
+                 '<button onclick="tbMax()" title="Maximizar"><svg viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" rx="1"/></svg></button>'
+                 '<button class="x" onclick="api(\'fechar\')" title="Fechar"><svg viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9"/></svg></button></div>'
+                 + "".join(f'<div class="gr {b}" data-b="{b}"></div>' for b in ("l", "r", "t", "b", "tl", "tr", "bl", "br")))
+    return (f'<!doctype html><html lang="pt-BR"{" class=fx" if fx else ""}><head><meta charset="utf-8">{meta}'
             f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(titulo)} · CS2 Coach</title>'
-            f'<style>{CSS}</style><script>{JS}</script></head><body>'
+            f'<style>{CSS}</style><script>{JS}</script></head><body>{barra}'
             f'<aside class="side"><button class="menu" onclick="alterna()" title="Recolher/expandir menu" aria-label="Menu">'
             f'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>'
             f'<div class="marca">{LOGO}<div><b>CS2 Coach</b><small>Hub</small></div></div>{links}<div class="esp"></div>'
@@ -2402,6 +2433,7 @@ def main():
     ap.add_argument("--token", default="cs2coach", help="token do arquivo de integração do jogo")
     ap.add_argument("--sem-ao-vivo", action="store_true", help="não liga o painel ao vivo dentro do Hub")
     ap.add_argument("--sem-navegador", action="store_true", help="não abre janela nem navegador (só o servidor)")
+    ap.add_argument("--janela-nativa", action="store_true", help="usa a moldura normal do Windows (sem a barra de título própria)")
     ap.add_argument("--sem-janela", action="store_true", help="usa o navegador em vez da janela própria")
     ap.add_argument("--sem-bandeja", action="store_true", help="não cria o ícone perto do relógio")
     ap.add_argument("--teste-janela", action="store_true", help="(teste automático) abre a janela, confere a página e sai")
@@ -2443,7 +2475,8 @@ def main():
     icone = None
     try:
         if not args.sem_navegador and not args.sem_janela and (os.name == "nt" or args.teste_janela):
-            candidata = janela_mod.Janela(url, armazem.PASTA_DADOS)
+            propria = not args.janela_nativa and armazem.ajuste_get("janela_nativa") != "1"
+            candidata = janela_mod.Janela(url, armazem.PASTA_DADOS, moldura_propria=propria)
             if candidata.disponivel():
                 janela = candidata
         if not args.sem_bandeja:
@@ -2453,12 +2486,14 @@ def main():
         if janela is not None:
             E.mostrar_janela = janela.mostrar
             janela.saindo = icone is None      # sem icone na bandeja nao ha como reabrir: fechar encerra
+            E.moldura = janela.moldura_propria
             janela.criar()
             try:
                 janela.iniciar(_teste_janela(janela) if args.teste_janela else None)
             except Exception as exc:
                 print("Não consegui abrir a janela própria:", exc)
                 E.mostrar_janela = None
+                E.moldura = False
                 janela = None
                 if not (janela_mod.abrir_modo_app(url)):
                     webbrowser.open(url)
@@ -2497,6 +2532,22 @@ def _teste_janela(janela):
                     break
             except Exception as exc:
                 resultado = f"FALHOU: {exc}"
+        if resultado.startswith("OK"):
+            extra = []
+            with contextlib.suppress(Exception):
+                time.sleep(2)
+                extra.append("moldura propria=" + str(janela.moldura_propria))
+                extra.append("api=" + str(janela.janela.evaluate_js("typeof (window.pywebview && window.pywebview.api && window.pywebview.api.alternar)")))
+                extra.append("barra=" + str(janela.janela.evaluate_js("!!document.getElementById('tb')")))
+                janela.alternar_maximizar()
+                time.sleep(1)
+                extra.append("maximizada=" + str(janela.maximizada))
+                janela.alternar_maximizar()
+                time.sleep(1)
+                extra.append("restaurada=" + str(not janela.maximizada))
+                from PIL import ImageGrab
+                ImageGrab.grab().save(str(armazem.PASTA_DADOS / "janela_teste.png"))
+            resultado += " | " + "; ".join(extra)
         with contextlib.suppress(Exception):
             (armazem.PASTA_DADOS / "janela_teste.txt").write_text(resultado, encoding="utf-8")
         janela.sair()

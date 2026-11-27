@@ -65,6 +65,14 @@ jobs:
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
           $f = "teste_janela\janela_teste.txt"
           if (Test-Path $f) { Get-Content $f; if ((Get-Content $f) -notlike "OK*") { exit 1 } } else { Write-Host "sem resultado"; if (Test-Path "teste_janela\hub.log") { Get-Content "teste_janela\hub.log" }; exit 1 }
+      - name: Guardar a captura da janela (para conferir o visual)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: captura-janela
+          path: teste_janela/janela_teste.png
+          if-no-files-found: ignore
       - name: Instalar Inno Setup
         run: choco install innosetup -y --no-progress
       - name: Gerar o instalador
