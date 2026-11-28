@@ -176,18 +176,18 @@ html.fx.max main{margin:40px 0 0 0;height:calc(100vh - 40px);border-radius:14px 
 #tb button{all:unset;width:46px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--tx);cursor:default;opacity:.85}
 #tb button svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.2}
 #tb button:hover{background:var(--hover);opacity:1}#tb button.x:hover{background:#c42b1c;color:#fff}
-html.fx:not(.max) #tb button.x{border-top-right-radius:12px}
+html.fx:not(.max) #tb button.x{border-top-right-radius:var(--rj)}
 .gr{position:fixed;z-index:60}.gr.l{left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}.gr.r{right:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
 .gr.t{top:0;left:10px;right:10px;height:4px;cursor:ns-resize}.gr.b{bottom:0;left:10px;right:10px;height:5px;cursor:ns-resize}
 .gr.tl{left:0;top:0;width:10px;height:10px;cursor:nwse-resize}.gr.br{right:0;bottom:0;width:10px;height:10px;cursor:nwse-resize}
 .gr.tr{right:0;top:0;width:10px;height:10px;cursor:nesw-resize}.gr.bl{left:0;bottom:0;width:10px;height:10px;cursor:nesw-resize}
 html.fx.max .gr{display:none}
-html.fx:not(.max)::after{content:"";position:fixed;inset:0;border:1px solid rgba(128,128,128,.45);border-radius:12px;pointer-events:none;z-index:70}
+html.fx{--rj:8px}html.fx.rgn{--rj:12px}
+html.fx:not(.max)::after{content:"";position:fixed;inset:0;border:1px solid rgba(128,128,128,.45);border-radius:var(--rj);pointer-events:none;z-index:70}
 html.max main{margin:0;height:100vh;border-radius:0;border-width:0 0 0 1px;box-shadow:none}
-main::-webkit-scrollbar,.side::-webkit-scrollbar{width:12px}
-main::-webkit-scrollbar-thumb,.side::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px;border:3px solid transparent;background-clip:content-box}
-main::-webkit-scrollbar-thumb:hover{background:var(--mut);background-clip:content-box;border:3px solid transparent}
-main::-webkit-scrollbar-track{background:transparent;margin:10px 0}
+main,.side,pre,.tw,body{scrollbar-width:none;-ms-overflow-style:none}
+main::-webkit-scrollbar,.side::-webkit-scrollbar,pre::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}
+main{overflow-x:hidden}
 .wrap{background:transparent;max-width:1180px;margin:0 auto;padding:14px 28px 60px}
 h1{font:600 28px/1.2 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:6px 0 4px}
 h2{font:600 17px/1.3 "Segoe UI Variable Display","Segoe UI",sans-serif;margin:28px 0 10px}
@@ -200,9 +200,11 @@ h4{margin:0 0 6px;font-size:13px;color:var(--mut);font-weight:600}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
 .graf{background:var(--card);border-radius:12px;padding:10px 12px}.graf svg{width:100%;height:auto}
 table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);border-radius:12px;overflow:hidden;margin:8px 0}
-th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--stroke);vertical-align:top}
+th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--stroke);vertical-align:top}
 th{color:var(--mut);font-weight:600;font-size:12.5px;background:var(--card2)}tr:last-child td{border-bottom:0}tbody tr:hover td,table tr:hover td{background:var(--hover)}
-.bar{background:var(--card2);border-radius:4px;height:8px;min-width:60px}.bar i{display:block;height:8px;border-radius:4px;background:var(--ac)}
+.bar{background:var(--card2);border-radius:4px;height:8px;min-width:36px}
+@media (max-width:1180px){th,td{padding:7px 5px;font-size:12.5px}th{font-size:11.5px}.icmask{margin-right:5px}.pill{padding:0 6px;font-size:11px}main{padding-left:2px}}
+@media (max-width:1000px){td,th{padding:6px 4px;font-size:12px}}.bar i{display:block;height:8px;border-radius:4px;background:var(--ac)}
 .dica{background:var(--card);border-radius:12px;padding:12px 16px;margin:10px 0;border-left:4px solid var(--warn)}
 .dica.p1{border-left-color:var(--ruim)}.dica.p3{border-left-color:var(--ac)}.dica h3{margin:0 0 6px;font-size:15px}.dica p{margin:4px 0}
 .ok{background:var(--card);border-left:4px solid var(--ok);border-radius:12px;padding:8px 14px;margin:8px 0}
@@ -221,14 +223,14 @@ label{display:block;margin:12px 0 4px;color:var(--mut);font-size:12.5px}.campo s
 button.cp{padding:2px 10px;min-height:26px;font-size:12px;margin:2px 4px 2px 0}
 code,.cmd{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,"Cascadia Mono",monospace;font-size:12.5px}
 pre{background:var(--card);border-radius:8px;padding:12px;overflow:auto;font-size:12.5px;max-height:340px}
-iframe{width:100%;height:calc(100vh - 150px);min-height:560px;border:0;border-radius:12px;background:transparent;color-scheme:normal}
+iframe{width:100%;height:calc(100vh - 150px);min-height:560px;overflow:hidden;border:0;border-radius:12px;background:transparent;color-scheme:normal}
 .pill{display:inline-block;background:var(--card2);color:var(--mut);border-radius:999px;padding:1px 9px;font-size:12px}
 .icarma{color:var(--ac);vertical-align:middle;margin-right:8px;width:auto}.icimg{height:30px;vertical-align:middle;margin-right:8px}
 .icmask{display:inline-block;vertical-align:middle;margin-right:8px;background:var(--ico);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .expl{color:var(--mut);font-size:12.5px;margin:2px 0 0}.pill.dados{background:var(--p-dados-bg);color:var(--p-dados-tx)}.pill.live{background:var(--p-live-bg);color:var(--p-live-tx)}
 details{background:var(--card);border-radius:12px;padding:8px 14px;margin:10px 0}summary{cursor:pointer;font-weight:600}
 .pill.ruim{background:var(--p-ruim-bg);color:var(--p-ruim-tx)}.pill.ok{background:var(--p-ok-bg);color:var(--p-ok-tx)}
-::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--card2);border-radius:8px;border:3px solid var(--bg)}
+::-webkit-scrollbar{display:none;width:0;height:0}*{scrollbar-width:none}
 """
 
 _I = lambda d: f'<svg viewBox="0 0 24 24" aria-hidden="true">{d}</svg>'
@@ -262,15 +264,19 @@ JS = """
 try{if(localStorage.getItem('menu')==='c')document.documentElement.classList.add('c')}catch(e){}
 function ajustaMax(){var m=(window.outerWidth>=screen.availWidth-2&&window.outerHeight>=screen.availHeight-2)||!!document.fullscreenElement;document.documentElement.classList.toggle('max',m)}
 window.addEventListener('resize',ajustaMax);document.addEventListener('DOMContentLoaded',ajustaMax);
-function alterna(){var c=document.body.classList.toggle('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}}
+function menuAuto(){var c=innerWidth<1120;try{c=c||localStorage.getItem('menu')==='c'}catch(e){}document.body.classList.toggle('compacto',c)}
+window.addEventListener('resize',menuAuto);
+function alterna(){var c=!document.body.classList.contains('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}document.body.classList.toggle('compacto',c||innerWidth<1120)}
 function copia(b){var t=b.dataset.c,o=b.textContent;function ok(){b.textContent='Copiado ✔';setTimeout(function(){b.textContent=o},1500)}try{navigator.clipboard.writeText(t).then(ok,function(){fb()})}catch(e){fb()}function fb(){var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(x)}}
 function api(f,a){try{var p=window.pywebview&&window.pywebview.api;if(p&&p[f])return p[f](a)}catch(e){}}
 function tbMax(){api('alternar')}
+window.addEventListener('message',function(e){var f=document.querySelector('iframe');if(f&&e.source===f.contentWindow&&e.data&&e.data.cs2h){f.style.height=Math.max(300,e.data.cs2h+8)+'px'}});
 function grip(b){return function(e){if(e.button===0){e.preventDefault();api('redimensionar',b)}}}
 document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.gr').forEach(function(g){g.addEventListener('mousedown',grip(g.dataset.b))});
-var t=document.querySelector('.dragr');if(t)t.addEventListener('dblclick',tbMax)});
+var t=document.querySelector('.dragr');if(t){t.addEventListener('dblclick',tbMax);t.addEventListener('mousedown',function(e){if(e.button===0){e.preventDefault();api('arrastar')}})}});
+document.addEventListener('keydown',function(e){if(e.key==='F11'){e.preventDefault();api('tela_cheia')}else if(e.key==='Escape'&&document.documentElement.classList.contains('fx')&&window.outerHeight>=screen.height-2){api('tela_cheia')}});
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a){e.preventDefault();fetch('/abrir?u='+encodeURIComponent(a.href))}});
-document.addEventListener('DOMContentLoaded',function(){try{if(localStorage.getItem('menu')==='c')document.body.classList.add('compacto')}catch(e){}});
+document.addEventListener('DOMContentLoaded',menuAuto);
 """
 
 
@@ -298,7 +304,7 @@ def pagina(titulo, corpo, ativo="/", refresh=None):
     fx = bool(E.moldura)
     barra = ""
     if fx:
-        barra = ('<div class="dragr pywebview-drag-region"></div><div id="tb">'
+        barra = ('<div class="dragr"></div><div id="tb">'
                  '<button onclick="api(\'minimizar\')" title="Minimizar"><svg viewBox="0 0 10 10"><path d="M0 5h10"/></svg></button>'
                  '<button onclick="tbMax()" title="Maximizar"><svg viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" rx="1"/></svg></button>'
                  '<button class="x" onclick="api(\'fechar\')" title="Fechar"><svg viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9"/></svg></button></div>'
@@ -2789,8 +2795,34 @@ def _teste_janela(janela):
                 janela.alternar_maximizar()
                 time.sleep(1)
                 extra.append("restaurada=" + str(not janela.maximizada))
+                janela.alternar_tela_cheia()
+                time.sleep(1)
+                h, w = janela._hwnd(), janela._w()
+                extra.append(f"tela cheia={janela.tela_cheia_ativa} ret={w.retangulo(h)} monitor={w.monitor_da_janela(h)[0]}")
+                janela.alternar_tela_cheia()
+                time.sleep(1)
+                extra.append("tela cheia saiu=" + str(not janela.tela_cheia_ativa))
+                # arrastar de verdade: simula o mouse apertado na faixa do topo e puxa 200x100 px
+                import ctypes
+                u = ctypes.windll.user32
+                x0, y0, w0, h0 = w.retangulo(h)
+                u.SetCursorPos(x0 + w0 // 2, y0 + 15)
+                time.sleep(0.3)
+                u.mouse_event(0x0002, 0, 0, 0, 0)
+                th = threading.Thread(target=janela.arrastar, daemon=True)
+                th.start()
+                for i in range(1, 21):
+                    u.SetCursorPos(x0 + w0 // 2 + i * 10, y0 + 15 + i * 5)
+                    time.sleep(0.03)
+                u.mouse_event(0x0004, 0, 0, 0, 0)
+                th.join(3)
+                x1, y1, _, _ = w.retangulo(h)
+                extra.append(f"arraste dx={x1 - x0} dy={y1 - y0}")
                 from PIL import ImageGrab
-                ImageGrab.grab().save(str(armazem.PASTA_DADOS / "janela_teste.png"))
+                img = ImageGrab.grab()
+                img.save(str(armazem.PASTA_DADOS / "janela_teste.png"))
+                px = lambda x, y: img.getpixel((max(0, x), max(0, y)))
+                extra.append(f"cantos(fora={px(x1 - 4, y1 - 4)} 1px={px(x1 + 1, y1 + 1)} 4px={px(x1 + 4, y1 + 4)} 12px={px(x1 + 12, y1 + 12)})")
             resultado += " | " + "; ".join(extra)
         with contextlib.suppress(Exception):
             (armazem.PASTA_DADOS / "janela_teste.txt").write_text(resultado, encoding="utf-8")

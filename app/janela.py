@@ -84,6 +84,10 @@ def estilizar_janela(titulo=TITULO):
         attr(35, cor)                                 # cor da barra de titulo (Windows 11)
         attr(34, bgr(60, 60, 60) if escuro else bgr(210, 216, 226))   # cor da borda
         attr(36, bgr(255, 255, 255) if escuro else bgr(26, 26, 26))   # cor do texto da barra
+        try:
+            _Win32().sombra(hwnd)
+        except Exception:
+            pass
         return True
     except Exception:
         return False
@@ -108,6 +112,8 @@ class _Win32:
         u.MonitorFromWindow.restype = wintypes.HANDLE
         u.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
         u.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+        u.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+        u.MonitorFromPoint.restype = wintypes.HANDLE
         u.GetAsyncKeyState.argtypes = [ctypes.c_int]
         g.CreateRoundRectRgn.restype = wintypes.HRGN
         g.CreateRoundRectRgn.argtypes = [ctypes.c_int] * 6
@@ -119,7 +125,7 @@ class _Win32:
         return r.left, r.top, r.right - r.left, r.bottom - r.top
 
     def mover(self, hwnd, x, y, w, h):
-        self.u.SetWindowPos(hwnd, None, int(x), int(y), int(w), int(h), 0x0014)   # NOZORDER | NOACTIVATE
+        self.u.SetWindowPos(hwnd, None, int(x), int(y), int(w), int(h), 0x4014)   # NOZORDER | NOACTIVATE | ASYNCWINDOWPOS
 
     def cursor(self):
         p = self.wt.POINT()
@@ -135,15 +141,34 @@ class _Win32:
         except Exception:
             return 1.0
 
-    def area_de_trabalho(self, hwnd):
+    def _info_monitor(self, mon):
         class MI(self.ct.Structure):
             _fields_ = [("cb", self.wt.DWORD), ("mon", self.wt.RECT), ("work", self.wt.RECT), ("fl", self.wt.DWORD)]
         mi = MI()
         mi.cb = self.ct.sizeof(MI)
-        mon = self.u.MonitorFromWindow(hwnd, 2)     # MONITOR_DEFAULTTONEAREST
         self.u.GetMonitorInfoW(mon, self.ct.byref(mi))
-        w = mi.work
-        return w.left, w.top, w.right - w.left, w.bottom - w.top
+        t = lambda r: (r.left, r.top, r.right - r.left, r.bottom - r.top)
+        return t(mi.mon), t(mi.work)
+
+    def monitor_da_janela(self, hwnd):
+        """((x, y, l, a) do monitor inteiro, (x, y, l, a) da area de trabalho sem a barra de tarefas)."""
+        return self._info_monitor(self.u.MonitorFromWindow(hwnd, 2))       # MONITOR_DEFAULTTONEAREST
+
+    def monitor_do_cursor(self):
+        x, y = self.cursor()
+        return self._info_monitor(self.u.MonitorFromPoint(self.wt.POINT(x, y), 2))
+
+    def area_de_trabalho(self, hwnd):
+        return self.monitor_da_janela(hwnd)[1]
+
+    def sombra(self, hwnd):
+        """Sombra do Windows em volta da janela sem moldura (estende 1 px da moldura para dentro)."""
+        try:
+            class M(self.ct.Structure):
+                _fields_ = [("a", self.ct.c_int), ("b", self.ct.c_int), ("c", self.ct.c_int), ("d", self.ct.c_int)]
+            self.ct.windll.dwmapi.DwmExtendFrameIntoClientArea(self.wt.HWND(hwnd), self.ct.byref(M(0, 0, 0, 1)))
+        except Exception:
+            pass
 
     def arredondar(self, hwnd, ativo):
         if not ativo:
@@ -175,11 +200,19 @@ class _Api:
     def redimensionar(self, borda):
         self._j.redimensionar(str(borda))
 
+    def arrastar(self):
+        self._j.arrastar()
+
+    def tela_cheia(self):
+        self._j.alternar_tela_cheia()
+        return self._j.tela_cheia_ativa
+
 
 class Janela:
     def __init__(self, url: str, pasta_dados: Path, moldura_propria: bool = True):
         self.moldura_propria = moldura_propria and os.name == "nt"
         self.maximizada = False
+        self.tela_cheia_ativa = False
         self._normal = None
         self._w32 = None
         self.url = url
@@ -211,7 +244,7 @@ class Janela:
                                             background_color=COR_FUNDO, **extra)
         self.janela.events.closing += self._ao_fechar
         if self.moldura_propria:
-            self.janela.events.resized += lambda *a: self._cantos()
+            self.janela.events.resized += lambda *a: self._cantos(final=False)
         with_suppress = getattr(self.janela.events, "shown", None)
         if with_suppress is not None:
             self.janela.events.shown += lambda: threading.Thread(target=self._estilo, daemon=True).start()
@@ -242,13 +275,37 @@ class Janela:
             self._w32 = _Win32()
         return self._w32
 
-    def _cantos(self):
+    @staticmethod
+    def _windows11() -> bool:
+        try:
+            import sys
+            return sys.getwindowsversion().build >= 22000
+        except Exception:
+            return False
+
+    def _cantos(self, final=True):
+        """Windows 11: o proprio Windows arredonda (DwmSetWindowAttribute), sem recorte manual que causava defeito nos cantos.
+        Windows 10: recorte arredondado, aplicado so quando a janela para de mudar de tamanho."""
         if not self.moldura_propria:
             return
         try:
             h = self._hwnd()
-            if h:
-                self._w().arredondar(h, not self.maximizada)
+            if not h:
+                return
+            w = self._w()
+            cheia = self.maximizada or self.tela_cheia_ativa
+            if self._windows11():
+                w.arredondar(h, False)
+            elif final:
+                w.arredondar(h, not cheia)
+            self._js(f"document.documentElement.classList.toggle('max',{'true' if cheia else 'false'});"
+                     f"document.documentElement.classList.toggle('rgn',{'false' if self._windows11() else 'true'})")
+        except Exception:
+            pass
+
+    def _js(self, codigo):
+        try:
+            self.janela.evaluate_js(codigo)
         except Exception:
             pass
 
@@ -264,26 +321,88 @@ class Janela:
         else:
             self.ocultar()
 
+    def _guardar_normal(self, h, w):
+        if not (self.maximizada or self.tela_cheia_ativa):
+            self._normal = w.retangulo(h)
+
     def alternar_maximizar(self):
         try:
             h, w = self._hwnd(), self._w()
             if not h:
                 return
-            if not self.maximizada:
-                self._normal = w.retangulo(h)
-                w.mover(h, *w.area_de_trabalho(h))
-                self.maximizada = True
-            else:
+            if self.maximizada or self.tela_cheia_ativa:
                 if self._normal:
                     w.mover(h, *self._normal)
-                self.maximizada = False
+                self.maximizada = self.tela_cheia_ativa = False
+            else:
+                self._guardar_normal(h, w)
+                w.mover(h, *w.area_de_trabalho(h))
+                self.maximizada = True
+            self._cantos()
+        except Exception:
+            pass
+
+    def alternar_tela_cheia(self):
+        """F11: cobre o monitor inteiro (inclusive a barra de tarefas) no monitor em que a janela esta."""
+        try:
+            h, w = self._hwnd(), self._w()
+            if not h:
+                return
+            if self.tela_cheia_ativa:
+                if self._normal:
+                    w.mover(h, *self._normal)
+                self.maximizada = self.tela_cheia_ativa = False
+            else:
+                self._guardar_normal(h, w)
+                w.mover(h, *w.monitor_da_janela(h)[0])
+                self.tela_cheia_ativa, self.maximizada = True, False
+            self._cantos()
+        except Exception:
+            pass
+
+    def arrastar(self):
+        """Mover a janela segurando a barra do topo: funciona entre monitores, tira da tela cheia ao puxar
+        e encosta no topo do monitor para maximizar."""
+        import time
+        try:
+            h, w = self._hwnd(), self._w()
+            if not h or not w.botao_esquerdo():
+                return
+            cx0, cy0 = w.cursor()
+            x0, y0, w0, h0 = w.retangulo(h)
+            esc = w.escala(h)
+            if self.maximizada or self.tela_cheia_ativa:
+                # espera o mouse andar um pouco (um duplo clique nao deve soltar a janela)
+                while w.botao_esquerdo():
+                    cx, cy = w.cursor()
+                    if abs(cx - cx0) + abs(cy - cy0) > 6:
+                        break
+                    time.sleep(0.01)
+                else:
+                    return
+                nx, ny, nw, nh = self._normal or (x0 + 100, y0 + 60, int(TAMANHO[0] * esc), int(TAMANHO[1] * esc))
+                frac = (cx0 - x0) / max(1, w0)
+                self.maximizada = self.tela_cheia_ativa = False
+                x0, y0, w0, h0 = int(cx0 - frac * nw), int(cy0 - 20 * esc), nw, nh
+                w.mover(h, x0, y0, w0, h0)
+                self._cantos(final=False)
+                time.sleep(0.03)
+            while w.botao_esquerdo():
+                cx, cy = w.cursor()
+                w.mover(h, x0 + cx - cx0, y0 + cy - cy0, w0, h0)
+                time.sleep(0.01)
+            mon, trab = w.monitor_do_cursor()
+            if w.cursor()[1] <= trab[1] + 2 and not self.maximizada:     # soltou encostado no topo: maximiza nesse monitor
+                self._normal = w.retangulo(h)
+                w.mover(h, *trab)
+                self.maximizada = True
             self._cantos()
         except Exception:
             pass
 
     def redimensionar(self, borda):
         """Arrasta uma borda/canto (l, r, t, b, combinados): acompanha o mouse enquanto o botao esquerdo estiver apertado."""
-        if self.maximizada:
+        if self.maximizada or self.tela_cheia_ativa:
             return
         import time
         try:
@@ -309,8 +428,8 @@ class Janela:
                     nh = max(mh, h0 - dy)
                     y = y0 + (h0 - nh)
                 w.mover(h, x, y, nw, nh)
-                w.arredondar(h, True)
                 time.sleep(0.012)
+            self._cantos()
         except Exception:
             pass
 

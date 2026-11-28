@@ -844,7 +844,7 @@ ul{padding-left:20px}.vazio{color:var(--mut);padding:6px 0}
 select{background:var(--card2);color:var(--tx);border:1px solid var(--stroke);border-bottom:2px solid var(--stroke);border-radius:4px;padding:5px 10px;font:inherit}
 select:focus{outline:0;border-bottom-color:var(--ac)}
 code{background:var(--card2);padding:1px 6px;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
-::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--stroke);border-radius:8px;border:3px solid var(--bg)}
+::-webkit-scrollbar{display:none;width:0;height:0}*{scrollbar-width:none}html,body{overflow-x:hidden}
 </style></head><body><div class="wrap">
 <div class="topo"><div class="sub"><span id="dot" class="dot"></span><b id="status" style="color:var(--tx);font-weight:600">aguardando o jogo...</b></div>
 <div class="sub">Modo: <select id="modo"><option value="auto">Automático</option></select> <span id="modoinfo"></span></div></div>
@@ -900,6 +900,7 @@ async function tick(){
   }catch(e){document.getElementById('dot').className='dot';document.getElementById('status').textContent='painel sem conexão com o programa'}
 }
 tick();setInterval(tick,1000);
+setInterval(function(){try{parent.postMessage({cs2h:document.documentElement.scrollHeight},'*')}catch(e){}},700);
 </script></body></html>"""
 
 
