@@ -294,10 +294,7 @@ class Janela:
                 return
             w = self._w()
             cheia = self.maximizada or self.tela_cheia_ativa
-            if self._windows11():
-                w.arredondar(h, False)
-            elif final:
-                w.arredondar(h, not cheia)
+            w.arredondar(h, False)      # o recorte manual nao funciona com o WebView2 (cantos com defeito): so o Windows 11 arredonda
             self._js(f"document.documentElement.classList.toggle('max',{'true' if cheia else 'false'});"
                      f"document.documentElement.classList.toggle('rgn',{'false' if self._windows11() else 'true'})")
         except Exception:

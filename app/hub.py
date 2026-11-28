@@ -182,7 +182,7 @@ html.fx:not(.max) #tb button.x{border-top-right-radius:var(--rj)}
 .gr.tl{left:0;top:0;width:10px;height:10px;cursor:nwse-resize}.gr.br{right:0;bottom:0;width:10px;height:10px;cursor:nwse-resize}
 .gr.tr{right:0;top:0;width:10px;height:10px;cursor:nesw-resize}.gr.bl{left:0;bottom:0;width:10px;height:10px;cursor:nesw-resize}
 html.fx.max .gr{display:none}
-html.fx{--rj:8px}html.fx.rgn{--rj:12px}
+html.fx{--rj:8px}html.fx.rgn{--rj:0px}
 html.fx:not(.max)::after{content:"";position:fixed;inset:0;border:1px solid rgba(128,128,128,.45);border-radius:var(--rj);pointer-events:none;z-index:70}
 html.max main{margin:0;height:100vh;border-radius:0;border-width:0 0 0 1px;box-shadow:none}
 main,.side,pre,.tw,body{scrollbar-width:none;-ms-overflow-style:none}
