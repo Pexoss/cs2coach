@@ -40,6 +40,7 @@ import armas as armas_mod  # noqa: E402
 import armazem  # noqa: E402
 import config_cs  # noqa: E402
 import icones  # noqa: E402
+import radar as radar_mod  # noqa: E402
 import janela as janela_mod  # noqa: E402
 import metricas as metricas_mod  # noqa: E402
 from versao import REPO, VERSAO  # noqa: E402
@@ -268,7 +269,7 @@ function menuAuto(){var c=innerWidth<1120;try{c=c||localStorage.getItem('menu')=
 window.addEventListener('resize',menuAuto);
 function alterna(){var c=!document.body.classList.contains('compacto');try{localStorage.setItem('menu',c?'c':'e')}catch(e){}document.body.classList.toggle('compacto',c||innerWidth<1120)}
 function copia(b){var t=b.dataset.c,o=b.textContent;function ok(){b.textContent='Copiado ✔';setTimeout(function(){b.textContent=o},1500)}try{navigator.clipboard.writeText(t).then(ok,function(){fb()})}catch(e){fb()}function fb(){var x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(x)}}
-function api(f,a){try{var p=window.pywebview&&window.pywebview.api;if(p&&p[f])return p[f](a)}catch(e){}}
+function api(f,a){try{var p=window.pywebview&&window.pywebview.api;if(p&&p[f])return a===undefined?p[f]():p[f](a)}catch(e){}}
 function tbMax(){api('alternar')}
 window.addEventListener('message',function(e){var f=document.querySelector('iframe');if(f&&e.source===f.contentWindow&&e.data&&e.data.cs2h){f.style.height=Math.max(300,e.data.cs2h+8)+'px'}});
 function grip(b){return function(e){if(e.button===0){e.preventDefault();api('redimensionar',b)}}}
@@ -712,7 +713,20 @@ def _tags_morte(m):
     return t
 
 
-def mapa_kills_svg(kills, mortes, modo):
+def radar_info(mapa):
+    """(info do radar do mapa lido do jogo da pessoa, erro). Usa a pasta do jogo achada ou informada em Ajustes."""
+    aj = armazem.ajustes_todos()
+    _, pj = config_cs.resolver_pastas(aj.get("pasta_cfg_usuario"), aj.get("pasta_cfg_jogo"))
+    return radar_mod.obter(mapa, armazem.PASTA_DADOS, pj)
+
+
+def _proj_radar(info):
+    """Funcoes que levam coordenadas do jogo para pixels do radar (imagem quadrada)."""
+    f = (info.get("largura") or 1024) / 1024.0
+    return (lambda x: (x - info["pos_x"]) / info["scale"] * f), (lambda y: (info["pos_y"] - y) / info["scale"] * f)
+
+
+def mapa_kills_svg(kills, mortes, modo, mapa=None):
     """Pontos e linhas por posicao no mapa (sem a imagem do radar): verde = suas kills, vermelho = suas mortes."""
     todos = []
     for k in kills:
@@ -722,22 +736,30 @@ def mapa_kills_svg(kills, mortes, modo):
     todos = [(x, y) for x, y in todos if x is not None and y is not None]
     if not todos:
         return ""
-    w, h, mg = 640, 470, 26
-    minx, maxx = min(x for x, _ in todos), max(x for x, _ in todos)
-    miny, maxy = min(y for _, y in todos), max(y for _, y in todos)
-    sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
+    rad = radar_info(mapa)[0] if mapa else None
+    if rad:
+        w = h = int(rad.get("largura") or 1024)
+        X, Y = _proj_radar(rad)
+    else:
+        w, h, mg = 640, 470, 26
+        minx, maxx = min(x for x, _ in todos), max(x for x, _ in todos)
+        miny, maxy = min(y for _, y in todos), max(y for _, y in todos)
+        sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
 
-    def X(x):
-        return mg + (x - minx) * sc
+        def X(x):
+            return mg + (x - minx) * sc
 
-    def Y(y):
-        return h - mg - (y - miny) * sc
+        def Y(y):
+            return h - mg - (y - miny) * sc
 
     p = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Mapa de kills e mortes" '
-         f'style="background:#0f141b;border-radius:10px;width:100%;height:auto">']
-    for fr in (0.25, 0.5, 0.75):
-        p.append(f'<line x1="{w * fr:.0f}" x2="{w * fr:.0f}" y1="0" y2="{h}" stroke="#1a2230"/>'
-                 f'<line y1="{h * fr:.0f}" y2="{h * fr:.0f}" x1="0" x2="{w}" stroke="#1a2230"/>')
+         f'style="background:#0f141b;border-radius:10px;width:100%;height:auto;max-width:{760 if rad else 900}px">']
+    if rad:
+        p.append(f'<image href="/img/mapa/{esc(mapa)}.png" width="{w}" height="{h}"/>')
+    else:
+        for fr in (0.25, 0.5, 0.75):
+            p.append(f'<line x1="{w * fr:.0f}" x2="{w * fr:.0f}" y1="0" y2="{h}" stroke="#1a2230"/>'
+                     f'<line y1="{h * fr:.0f}" y2="{h * fr:.0f}" x1="0" x2="{w}" stroke="#1a2230"/>')
     if modo in ("mortes", "ambas"):
         for m in mortes:
             if None in (m.get("x"), m.get("y"), m.get("ax"), m.get("ay")):
@@ -793,7 +815,7 @@ def pg_kills(pid, q):
     tabs = "<div class='tabs'>" + "".join(
         f"<a class='{'on' if modo == v else ''}' href='/partida/{pid}/kills?v={v}'>{rot}</a>"
         for v, rot in (("ambas", "Kills e mortes"), ("kills", "Só kills"), ("mortes", "Só mortes"))) + "</div>"
-    mapa_html = mapa_kills_svg(kills, mortes, modo)
+    mapa_html = mapa_kills_svg(kills, mortes, modo, d.get("mapa"))
     leg = ("<p class='nota'><span style='color:#3ddc97'>●</span> você (kill) → <span style='color:#3ddc97'>✕</span> inimigo abatido · "
            "<span style='color:#ff6b6b'>◇</span> você (morte) ← <span style='color:#ff6b6b'>○</span> quem te matou. "
            "O número é o round; passe o mouse para ver arma e distância. É um mapa de pontos: não uso a imagem do radar do jogo.</p>")
@@ -913,13 +935,12 @@ def bloco_momentos_partida(pid, res):
 
 def pg_rever(q):
     sid = escopo()
-    todos = list(reversed(armazem.resultados(sid)))
     pid_f = (q.get("p") or [""])[0]
     tipo_f = (q.get("t") or [""])[0]
     if pid_f.isdigit():
-        todos = [r for r in todos if r["id"] == int(pid_f)]
+        todos = armazem.resultados(None, so_id=int(pid_f))
     else:
-        todos = todos[:12]
+        todos = list(reversed(armazem.resultados(sid, ultimas=12)))
     tabs = "<div class='tabs'>" + "".join(
         f"<a class='{'on' if tipo_f == k else ''}' href='/rever?t={k}'>{esc(v)}</a>"
         for k, v in (("", "Todos"),) + tuple(TIPOS_MOMENTO.items())) + "</div>" if not pid_f.isdigit() else ""
@@ -985,12 +1006,19 @@ def pg_radar(q):
     if not pts:
         return pagina("Mapa de mortes", topo + tabs + "<div class='vazio'>Sem posições nesse mapa.</div>", "/radar")
     N = 8
-    minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
-    miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
-    w, h, mg = 700, 520, 24
-    sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
-    ox = mg + ((w - 2 * mg) - (maxx - minx) * sc) / 2
-    oy = mg + ((h - 2 * mg) - (maxy - miny) * sc) / 2
+    rad, rad_erro = radar_info(m)
+    if rad:                                  # radar do proprio jogo: o mapa inteiro, zonas sobre ele
+        w = h = int(rad.get("largura") or 1024)
+        sc = ((rad.get("largura") or 1024) / 1024.0) / rad["scale"]
+        minx, maxy, ox, oy = rad["pos_x"], rad["pos_y"], 0, 0
+        maxx, miny = minx + w / sc, maxy - h / sc
+    else:
+        minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
+        miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
+        w, h, mg = 700, 520, 24
+        sc = min((w - 2 * mg) / max(maxx - minx, 1), (h - 2 * mg) / max(maxy - miny, 1))
+        ox = mg + ((w - 2 * mg) - (maxx - minx) * sc) / 2
+        oy = mg + ((h - 2 * mg) - (maxy - miny) * sc) / 2
     cw, ch = max(maxx - minx, 1) / N, max(maxy - miny, 1) / N
 
     def X(x):
@@ -1009,7 +1037,9 @@ def pg_radar(q):
         z = zonas.setdefault(_zona(x["x"], x["y"], minx, miny, cw, ch, N), {"m": 0, "k": 0, "tipos": {}, "armas": {}})
         z["k"] += 1
     maxm = max([z["m"] for z in zonas.values()] + [1])
-    sv = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Mapa de mortes e kills" style="background:var(--card2);border-radius:12px;width:100%;height:auto">']
+    sv = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Mapa de mortes e kills" style="background:var(--card2);border-radius:12px;width:100%;height:auto;max-width:{820 if rad else 900}px">']
+    if rad:
+        sv.append(f'<image href="/img/mapa/{esc(m)}.png" width="{w}" height="{h}"/>')
     for (c, r), z in zonas.items():
         if modo != "kills" and z["m"]:
             x0, y1 = X(minx + c * cw), Y(miny + r * ch)
@@ -1052,7 +1082,8 @@ def pg_radar(q):
              + tabs + tabs2 + "".join(sv)
              + "<p class='nota'><span style='color:#3ddc97'>●</span> onde você estava ao fazer uma kill · "
                "<span style='color:#ff6b6b'>◆</span> onde você estava ao morrer. Passe o mouse para ver arma, tipo de duelo e distância. "
-               "É um mapa de pontos e zonas: o jogo não entrega a imagem do radar.</p>"
+               + ("Fundo: radar lido dos arquivos do seu próprio jogo.</p>" if rad else
+                  "Sem o radar do jogo, o mapa é só de pontos e zonas." + (f" Motivo: {esc(rad_erro)}." if rad_erro else "") + "</p>")
              + "<h2>Zonas onde você mais morre</h2>"
              + ("<table><tr><th>Zona</th><th>Mortes</th><th>Kills</th><th>Saldo</th><th>Duelo mais comum</th><th>Arma que mais te mata</th></tr>"
                 + linhas + "</table>" if linhas else "<div class='vazio'>Sem dados.</div>")
@@ -1075,11 +1106,21 @@ def partidas_sem_detalhe(todos):
     return [r for r in todos if r["res"].get("kills_det") is None or r["res"].get("momentos") is None]
 
 
+_INDICE_DEMOS = {"t": 0.0, "mapa": {}}
+_LOCK_INDICE = threading.Lock()
+
+
 def _acha_demo(nome):
-    for d in todas_as_demos():
-        if d.name == nome:
-            return d
-    return None
+    """Caminho da demo pelo nome. O indice das pastas fica em cache por 2 minutos (varrer as pastas a cada linha deixava a pagina lenta)."""
+    with _LOCK_INDICE:
+        if time.time() - _INDICE_DEMOS["t"] > 120 or nome not in _INDICE_DEMOS["mapa"]:
+            if time.time() - _INDICE_DEMOS["t"] > 15 or not _INDICE_DEMOS["mapa"]:
+                try:
+                    _INDICE_DEMOS["mapa"] = {d.name: d for d in todas_as_demos()}
+                except Exception:
+                    pass
+                _INDICE_DEMOS["t"] = time.time()
+        return _INDICE_DEMOS["mapa"].get(nome)
 
 
 def _celula_bloco(b, ant, chave, casas=0):
@@ -1360,6 +1401,16 @@ def pg_arma(nome):
 
 def pg_configuracoes():
     aj = armazem.ajustes_todos()
+    aviso_leitura = ""
+    try:                                   # sempre le de novo ao abrir a pagina (cai fora rapido: sao poucos arquivos)
+        with _LOCK_CONFIG:
+            nova = config_cs.ler_configuracoes(aj.get("pasta_cfg_usuario") or None, aj.get("pasta_cfg_jogo") or None)
+            if nova.get("arquivos"):
+                armazem.salvar_config(nova)
+            else:
+                aviso_leitura = "".join(f"<div class='aviso'>{esc(a)}</div>" for a in nova.get("avisos", []))
+    except Exception:
+        pass
     leituras = armazem.ultimas_configs(30)
     if not leituras:
         try:
@@ -1379,7 +1430,10 @@ def pg_configuracoes():
            "e sugere mudanças. Ele <b>só lê</b>: nada é alterado nos seus arquivos. "
            f"Última leitura: {data_br(conf['lido_em'])}.</div><p>"
            + form_post("ler-config", "", "Reler configurações agora") + "</p>")
-    avisos = "".join(f"<div class='aviso'>{esc(a)}</div>" for a in conf.get("avisos", []))
+    avisos = aviso_leitura + "".join(f"<div class='aviso'>{esc(a)}</div>" for a in conf.get("avisos", []))
+    if conf.get("pasta_usuario") or conf.get("pasta_jogo"):
+        avisos += ("<div class='ok'>Lendo de: " + esc(conf.get("pasta_usuario") or "—") + " (usuário) · "
+                   + esc(conf.get("pasta_jogo") or "—") + " (jogo)</div>")
 
     def card(v, l, ajuda=""):
         return (f"<div class='card'><b>{esc(str(v))}</b><span>{esc(l)}</span>"
@@ -2350,6 +2404,12 @@ class Handler(BaseHTTPRequestHandler):
                 if icones.nome_png_valido(nome) and arq.is_file():
                     return self._enviar(arq.read_bytes(), tipo="image/png")
                 return self._enviar("Imagem não encontrada.", 404, "text/plain; charset=utf-8")
+            if rota == "img" and len(seg) == 3 and seg[1] == "mapa" and seg[2].endswith(".png"):
+                nome = seg[2][:-4]
+                arq = armazem.PASTA_DADOS / "mapas" / f"{nome}.png"
+                if icones.nome_png_valido(nome) and arq.is_file():
+                    return self._enviar(arq.read_bytes(), tipo="image/png")
+                return self._enviar("Imagem não encontrada.", 404, "text/plain; charset=utf-8")
             if rota == "exportar.json":
                 return self._enviar(exportar_json(), tipo="application/json; charset=utf-8",
                                     extra={"Content-Disposition": 'attachment; filename="cs2coach_resumo.json"'})
@@ -2390,12 +2450,17 @@ class Handler(BaseHTTPRequestHandler):
                             E.mensagem = f"O valor de “{esc(k)}” precisa ser um número."
                         return self._redirecionar("/ajustes")
                     armazem.ajuste_set(k, v)
+            radar_mod.esquecer_falhas()
             with E.lock:
                 E.mensagem = "Ajustes salvos."
             return self._redirecionar("/ajustes")
         if acao == "ler-config":
             aj = armazem.ajustes_todos()
             conf = config_cs.ler_configuracoes(aj.get("pasta_cfg_usuario") or None, aj.get("pasta_cfg_jogo") or None)
+            if not conf.get("arquivos"):
+                with E.lock:
+                    E.mensagem = "Não achei arquivos de configuração do CS2 nas pastas. " + " ".join(conf.get("avisos", []))
+                return self._redirecionar("/configuracoes")
             _, mudou = armazem.salvar_config(conf)
             with E.lock:
                 E.mensagem = ("Configurações lidas: encontrei mudanças desde a última leitura." if mudou

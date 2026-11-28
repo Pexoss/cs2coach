@@ -246,6 +246,57 @@ def _mais_recente(pasta: Path, padrao: str):
     return max(cands, key=lambda p: p.stat().st_mtime, default=None)
 
 
+_PADROES_USUARIO = ("cs2_user_convars*.vcfg", "cs2_machine_convars*.vcfg", "cs2_user_keys*.vcfg", "cs2_video.txt")
+
+
+def _tem_arquivos_usuario(d: Path) -> bool:
+    try:
+        return any(next(d.glob(pad), None) is not None for pad in _PADROES_USUARIO)
+    except OSError:
+        return False
+
+
+def _eh_pasta_jogo(d: Path) -> bool:
+    partes = [x.lower() for x in d.parts]
+    return d.name.lower() == "cfg" and "csgo" in partes
+
+
+def resolver_pastas(*caminhos):
+    """
+    Aceita qualquer pasta que a pessoa informou (em qualquer campo, mesmo trocada ou um nivel acima/abaixo:
+    ...\\730, ...\\730\\local, ...\\730\\remote\\cfg, ...\\game\\csgo\\cfg, a pasta do jogo...) e descobre sozinho
+    qual e a pasta de configuracao do usuario (com os .vcfg) e qual e a pasta cfg do jogo.
+    Devolve (pasta_usuario ou None, pasta_jogo ou None).
+    """
+    usuarios, jogos = [], []
+    for c in caminhos:
+        if not c:
+            continue
+        p = Path(str(c).strip().strip('"'))
+        cand = [p, p / "cfg", p / "local" / "cfg", p / "remote" / "cfg", p / "730" / "local" / "cfg",
+                p / "730" / "remote" / "cfg", p / "game" / "csgo" / "cfg", p / "csgo" / "cfg"]
+        if p.name.lower() == "cfg" and p.parent.name.lower() == "remote":
+            cand.append(p.parent.parent / "local" / "cfg")
+        if p.name.lower() == "userdata":
+            try:
+                for conta in p.iterdir():
+                    cand.append(conta / "730" / "local" / "cfg")
+            except OSError:
+                pass
+        for d in cand:
+            try:
+                if not d.is_dir():
+                    continue
+                if _tem_arquivos_usuario(d):
+                    usuarios.append(d)
+                if _eh_pasta_jogo(d):
+                    jogos.append(d)
+            except OSError:
+                pass
+    usuarios.sort(key=lambda d: -_mtime_pasta(d))
+    return (usuarios[0] if usuarios else None), (jogos[0] if jogos else None)
+
+
 def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
     """
     Le tudo e devolve um dicionario:
@@ -255,8 +306,14 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
     """
     avisos = []
     conta = None
+    informado = [x for x in (pasta_usuario, pasta_jogo) if x]
+    u_res, j_res = resolver_pastas(*informado)
+    if informado and not (u_res or j_res):
+        avisos.append("Nenhuma das pastas informadas em Ajustes tem os arquivos de configuração do CS2; usei a detecção "
+                      "automática. A pasta certa é ...\\Steam\\userdata\\<número>\\730\\local\\cfg.")
+    pasta_usuario = u_res if u_res else None
+    pasta_jogo = j_res if j_res else None
     if pasta_usuario:
-        pasta_usuario = Path(pasta_usuario)
         conta = conta_da_pasta(pasta_usuario)
     else:
         achadas = achar_userdata()
@@ -268,7 +325,7 @@ def ler_configuracoes(pasta_usuario=None, pasta_jogo=None) -> dict:
         else:
             avisos.append("Não encontrei a pasta userdata do Steam. Informe o caminho em Ajustes "
                           "(algo como ...\\Steam\\userdata\\<número>\\730\\local\\cfg).")
-    pasta_jogo = Path(pasta_jogo) if pasta_jogo else achar_pasta_jogo_cfg()
+    pasta_jogo = pasta_jogo or achar_pasta_jogo_cfg()
 
     conf = {"lido_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "conta": conta,
             "steamid64": conta_para_steamid64(conta) if conta else None,

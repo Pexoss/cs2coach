@@ -399,7 +399,7 @@ def salvar_config(conf: dict):
 
 def _plano(conf: dict) -> dict:
     """Pares nome->valor de todas as configuracoes (para comparar leituras)."""
-    out = {}
+    out = {"_pasta_usuario": conf.get("pasta_usuario"), "_pasta_jogo": conf.get("pasta_jogo")}
     for grupo in ("convars", "video", "teclas", "autoexec"):
         for k, v in (conf.get(grupo) or {}).items():
             out[f"{grupo}:{k}"] = v.get("valor") if isinstance(v, dict) else v
@@ -593,7 +593,7 @@ def contar_sessoes_sem_demo() -> int:
 # --------------------------------------------------------------------------
 # Resultados completos (para evolucao, notas e plano de treino)
 # --------------------------------------------------------------------------
-def resultados(steamid=None, mapa=None) -> list:
+def resultados(steamid=None, mapa=None, ultimas=None, so_id=None) -> list:
     """Partidas em ordem cronologica, cada uma com o resultado completo ja lido: [{id, mapa, data_demo, res}]."""
     sql = "SELECT id, mapa, data_demo, resultado_json FROM partidas WHERE 1=1"
     par = []
@@ -603,10 +603,20 @@ def resultados(steamid=None, mapa=None) -> list:
     if mapa:
         sql += " AND mapa=?"
         par.append(mapa)
-    sql += " ORDER BY data_demo, id"
+    if so_id is not None:
+        sql += " AND id=?"
+        par.append(int(so_id))
+    if ultimas:
+        sql += " ORDER BY data_demo DESC, id DESC LIMIT ?"
+        par.append(int(ultimas))
+    else:
+        sql += " ORDER BY data_demo, id"
     out = []
     with _db() as con:
-        for r in con.execute(sql, par):
+        linhas = list(con.execute(sql, par))
+        if ultimas:
+            linhas.reverse()
+        for r in linhas:
             try:
                 res = json.loads(r["resultado_json"] or "{}")
             except ValueError:
